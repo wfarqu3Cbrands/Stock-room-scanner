@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<title>Stockroom Scanner</title>
+<meta name="theme-color" content="#14150F" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Stockroom" />
+<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #14150F;
+  color: #EDEAE2;
+  font-family: 'Archivo', sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  padding: max(24px, env(safe-area-inset-top)) 16px calc(48px + env(safe-area-inset-bottom));
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+input::placeholder { color: #6b6f66; }
+button { font-family: inherit; cursor: pointer; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.frame { width: 100%; max-width: 640px; }
+
+/* Header */
+.header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 20px; }
+.eyebrow { font-size: 11px; letter-spacing: 0.14em; color: #F2C230; font-weight: 700; margin-bottom: 4px; }
+.title { font-size: 30px; font-weight: 800; margin: 0; letter-spacing: -0.02em; }
+.total-badge { text-align: right; }
+.total-num {
+  display: block; font-family: 'IBM Plex Mono', monospace; font-size: 28px;
+  font-weight: 600; color: #39FF88; line-height: 1;
+}
+.total-label { font-size: 11px; color: #8A8F82; letter-spacing: 0.04em; }
+
+/* Mode toggle */
+.toggle-row {
+  display: flex; gap: 8px; margin-bottom: 12px; background: #1D1F18;
+  padding: 5px; border-radius: 12px; border: 1px solid #2A2D24;
+}
+.toggle-btn {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 12px 10px; border-radius: 8px; border: none; background: transparent;
+  color: #8A8F82; font-weight: 700; font-size: 13px; letter-spacing: 0.03em;
+}
+.toggle-btn.active-add { background: #233B26; color: #39FF88; }
+.toggle-btn.active-remove { background: #3B2420; color: #FF6B4A; }
+
+/* Camera */
+.camera-toggle-btn {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px 10px; border-radius: 10px; border: 1px dashed #3A3E33; background: transparent;
+  color: #B7BCAE; font-weight: 700; font-size: 13px; margin-bottom: 4px;
+}
+.camera-toggle-btn.active {
+  border: 1px solid #3B2420; background: #241512; color: #FF6B4A;
+}
+.camera-error-text { margin: 8px 0 0; font-size: 12.5px; color: #FF9A80; line-height: 1.5; }
+.camera-panel {
+  position: relative; border-radius: 12px; overflow: hidden; margin: 12px 0;
+  background: #000; border: 1px solid #2A2D24; aspect-ratio: 4 / 3; display: none;
+}
+.camera-panel.open { display: block; }
+.camera-video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.camera-overlay { position: absolute; inset: 18% 12%; pointer-events: none; }
+.camera-hint {
+  position: absolute; bottom: 10px; left: 0; right: 0; text-align: center;
+  font-size: 12px; color: #EDEAE2; text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+}
+
+/* Scan target */
+.scan-wrap { margin-bottom: 16px; }
+.scan-target { position: relative; padding: 4px; }
+.corner { position: absolute; width: 18px; height: 18px; border-color: #F2C230; }
+.corner.tl { top: 0; left: 0; border-top: 3px solid; border-left: 3px solid; border-top-left-radius: 6px; }
+.corner.tr { top: 0; right: 0; border-top: 3px solid; border-right: 3px solid; border-top-right-radius: 6px; }
+.corner.bl { bottom: 0; left: 0; border-bottom: 3px solid; border-left: 3px solid; border-bottom-left-radius: 6px; }
+.corner.br { bottom: 0; right: 0; border-bottom: 3px solid; border-right: 3px solid; border-bottom-right-radius: 6px; }
+.scan-input {
+  width: 100%; background: #1A1C15; border: 1px solid #33372B; border-radius: 10px;
+  padding: 18px 16px; font-size: 17px; color: #EDEAE2; font-family: 'IBM Plex Mono', monospace; outline: none;
+}
+
+/* LED readout */
+.readout {
+  background: #0E0F0B; border: 2px solid #2E332B; border-radius: 12px; padding: 18px 20px;
+  margin-bottom: 16px; transition: border-color .15s ease, box-shadow .15s ease; min-height: 88px;
+}
+.readout.flash { border-color: #39FF88; box-shadow: 0 0 24px rgba(57,255,136,0.35); }
+.readout-idle { display: flex; align-items: center; gap: 10px; color: #575C4F; font-size: 14px; height: 52px; }
+.readout-name {
+  font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #9BE8AE; margin-bottom: 4px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.readout-row { display: flex; align-items: baseline; gap: 12px; }
+.readout-count { font-family: 'IBM Plex Mono', monospace; font-size: 40px; font-weight: 600; color: #39FF88; line-height: 1; }
+.readout-delta { font-family: 'IBM Plex Mono', monospace; font-size: 16px; font-weight: 600; }
+.readout-barcode { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #575C4F; margin-top: 6px; }
+
+.error-banner { background: #3B2420; color: #FF9A80; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; display: none; }
+.error-banner.show { display: block; }
+
+/* Modal */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(10,10,8,0.72); display: none;
+  align-items: center; justify-content: center; padding: 20px; z-index: 50;
+}
+.modal-overlay.open { display: flex; }
+.modal { background: #1A1C15; border: 1px solid #33372B; border-radius: 14px; padding: 24px; width: 100%; max-width: 380px; }
+.modal-eyebrow { font-size: 11px; letter-spacing: 0.12em; color: #F2C230; font-weight: 700; margin-bottom: 6px; }
+.modal-barcode { font-family: 'IBM Plex Mono', monospace; font-size: 20px; margin-bottom: 18px; }
+.modal-label { display: block; font-size: 12px; color: #8A8F82; margin-bottom: 6px; }
+.modal-input {
+  width: 100%; background: #14150F; border: 1px solid #33372B; border-radius: 8px;
+  padding: 12px 14px; font-size: 15px; color: #EDEAE2; margin-bottom: 18px; outline: none;
+}
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.modal-cancel {
+  display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-radius: 8px;
+  border: 1px solid #33372B; background: transparent; color: #8A8F82; font-size: 13px; font-weight: 600;
+}
+.modal-confirm {
+  display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-radius: 8px;
+  border: none; background: #F2C230; color: #1A1C15; font-size: 13px; font-weight: 700;
+}
+
+/* Table */
+.table-section { margin-top: 8px; }
+.table-header-row { display: flex; gap: 10px; margin-bottom: 12px; }
+.search-input {
+  flex: 1; background: #1A1C15; border: 1px solid #2A2D24; border-radius: 8px;
+  padding: 10px 12px; font-size: 14px; color: #EDEAE2; outline: none;
+}
+.export-btn {
+  display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-radius: 8px;
+  border: none; background: #39FF88; color: #0E1B10; font-size: 13px; font-weight: 700; white-space: nowrap;
+}
+.empty-state {
+  padding: 32px 16px; text-align: center; color: #575C4F; font-size: 14px;
+  border: 1px dashed #2A2D24; border-radius: 10px;
+}
+.table-wrap { border: 1px solid #2A2D24; border-radius: 10px; overflow: hidden; overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th {
+  text-align: left; padding: 10px 12px; background: #1D1F18; color: #8A8F82;
+  font-size: 11px; letter-spacing: 0.06em; font-weight: 700; border-bottom: 1px solid #2A2D24;
+}
+td { padding: 10px 12px; color: #EDEAE2; border-bottom: 1px solid #22241D; }
+.mono { font-family: 'IBM Plex Mono', monospace; color: #B7BCAE; }
+.row-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.icon-btn {
+  width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
+  border-radius: 6px; border: 1px solid #2A2D24; background: #1A1C15; color: #B7BCAE;
+}
+.icon-btn.danger { border-color: #3B2420; color: #FF6B4A; }
+.edit-input {
+  width: 100%; background: #14150F; border: 1px solid #33372B; border-radius: 6px;
+  padding: 6px 8px; font-size: 13.5px; color: #EDEAE2; outline: none;
+}
+
+/* Footer */
+.footer { margin-top: 24px; text-align: center; }
+.reset-link { background: none; border: none; color: #575C4F; font-size: 12px; text-decoration: underline; }
+.reset-confirm { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: #8A8F82; }
+.reset-yes { background: #3B2420; color: #FF9A80; border: none; border-radius: 6px; padding: 6px 10px; font-size: 12px; }
+.reset-no { background: transparent; color: #8A8F82; border: 1px solid #2A2D24; border-radius: 6px; padding: 6px 10px; font-size: 12px; }
+
+/* Install banner */
+.install-banner {
+  display: none; align-items: center; justify-content: space-between; gap: 10px;
+  background: #1D1F18; border: 1px solid #2A2D24; border-radius: 10px; padding: 10px 14px;
+  margin-bottom: 16px; font-size: 12.5px; color: #B7BCAE;
+}
+.install-banner.show { display: flex; }
+.install-btn { background: #F2C230; color: #1A1C15; border: none; border-radius: 6px; padding: 8px 12px; font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+
+svg { display: block; }
+
+</style>
+</head>
+<body>
+  <div class="frame">
+    <div class="header">
+      <div>
+        <div class="eyebrow">STOCKROOM &middot; LIVE COUNT</div>
+        <h1 class="title">Scanner</h1>
+      </div>
+      <div class="total-badge">
+        <span class="total-num" id="totalUnits">0</span>
+        <span class="total-label">units on hand</span>
+      </div>
+    </div>
+
+    <div class="toggle-row" role="group" aria-label="Scan mode">
+      <button class="toggle-btn active-add" id="modeAddBtn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg>
+        ADD STOCK
+      </button>
+      <button class="toggle-btn" id="modeRemoveBtn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12h14"/></svg>
+        REMOVE STOCK
+      </button>
+    </div>
+
+    <button class="camera-toggle-btn" id="cameraToggleBtn">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      <span id="cameraToggleLabel">Scan with camera</span>
+    </button>
+    <div class="camera-error-text" id="cameraError"></div>
+
+    <div class="camera-panel" id="cameraPanel">
+      <video id="cameraVideo" class="camera-video" muted playsinline autoplay></video>
+      <div class="camera-overlay">
+        <span class="corner tl"></span><span class="corner tr"></span>
+        <span class="corner bl"></span><span class="corner br"></span>
+      </div>
+      <div class="camera-hint">Hold a barcode inside the frame</div>
+    </div>
+
+    <form class="scan-wrap" id="scanForm">
+      <div class="scan-target">
+        <span class="corner tl"></span><span class="corner tr"></span>
+        <span class="corner bl"></span><span class="corner br"></span>
+        <input class="scan-input" id="scanInput" placeholder="Scan or type barcode, then Enter" autocomplete="off" />
+      </div>
+    </form>
+
+    <div class="readout" id="readout">
+      <div class="readout-idle" id="readoutIdle">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        Ready to scan
+      </div>
+      <div id="readoutContent" style="display:none;">
+        <div class="readout-name" id="readoutName"></div>
+        <div class="readout-row">
+          <span class="readout-count" id="readoutCount"></span>
+          <span class="readout-delta" id="readoutDelta"></span>
+        </div>
+        <div class="readout-barcode" id="readoutBarcode"></div>
+      </div>
+    </div>
+
+    <div class="error-banner" id="saveError">Couldn't save last change &mdash; check that your browser allows local storage.</div>
+
+    <div class="modal-overlay" id="modalOverlay">
+      <form class="modal" id="newItemForm">
+        <div class="modal-eyebrow">NEW BARCODE</div>
+        <div class="modal-barcode" id="modalBarcode"></div>
+        <label class="modal-label" for="newItemName">Item name</label>
+        <input class="modal-input" id="newItemName" placeholder="e.g. 9mm Hex Bolt, box of 50" />
+        <div class="modal-actions">
+          <button type="button" class="modal-cancel" id="modalCancelBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            Cancel
+          </button>
+          <button type="submit" class="modal-confirm" id="modalConfirmBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+            <span id="modalConfirmLabel">Add item</span>
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <div class="table-section">
+      <div class="table-header-row">
+        <input class="search-input" id="searchInput" placeholder="Search items or barcode&hellip;" />
+        <button class="export-btn" id="exportBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          Export .xlsx
+        </button>
+      </div>
+      <div class="empty-state" id="emptyState">No items yet. Scan a barcode above to start the list.</div>
+      <div class="table-wrap" id="tableWrap" style="display:none;">
+        <table>
+          <thead>
+            <tr><th>Item</th><th>Barcode</th><th style="text-align:right;">Count</th><th></th></tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="footer">
+      <button class="reset-link" id="resetLinkBtn">Clear all data</button>
+      <div class="reset-confirm" id="resetConfirm" style="display:none;">
+        <span>Clear all inventory data? This can't be undone.</span>
+        <button class="reset-yes" id="resetYesBtn">Yes, clear it</button>
+        <button class="reset-no" id="resetNoBtn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+
+  const STORAGE_KEY = "stockroom-inventory-v1";
+  const SCAN_COOLDOWN_MS = 1500;
+  const BARCODE_FORMATS = ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "codabar", "itf", "qr_code"];
+
+  // ---- State ----
+  let items = {}; // { barcode: { name, count } }
+  let mode = "add"; // 'add' | 'remove'
+  let pendingBarcode = null;
+  let search = "";
+  let editingBarcode = null;
+
+  // ---- Elements ----
+  const el = (id) => document.getElementById(id);
+  const totalUnitsEl = el("totalUnits");
+  const modeAddBtn = el("modeAddBtn");
+  const modeRemoveBtn = el("modeRemoveBtn");
+  const cameraToggleBtn = el("cameraToggleBtn");
+  const cameraToggleLabel = el("cameraToggleLabel");
+  const cameraError = el("cameraError");
+  const cameraPanel = el("cameraPanel");
+  const cameraVideo = el("cameraVideo");
+  const scanForm = el("scanForm");
+  const scanInput = el("scanInput");
+  const readout = el("readout");
+  const readoutIdle = el("readoutIdle");
+  const readoutContent = el("readoutContent");
+  const readoutName = el("readoutName");
+  const readoutCount = el("readoutCount");
+  const readoutDelta = el("readoutDelta");
+  const readoutBarcode = el("readoutBarcode");
+  const saveError = el("saveError");
+  const modalOverlay = el("modalOverlay");
+  const newItemForm = el("newItemForm");
+  const modalBarcode = el("modalBarcode");
+  const newItemName = el("newItemName");
+  const modalCancelBtn = el("modalCancelBtn");
+  const modalConfirmLabel = el("modalConfirmLabel");
+  const searchInput = el("searchInput");
+  const exportBtn = el("exportBtn");
+  const emptyState = el("emptyState");
+  const tableWrap = el("tableWrap");
+  const tableBody = el("tableBody");
+  const resetLinkBtn = el("resetLinkBtn");
+  const resetConfirm = el("resetConfirm");
+  const resetYesBtn = el("resetYesBtn");
+  const resetNoBtn = el("resetNoBtn");
+
+  // ---- Persistence (localStorage — this device only) ----
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      items = raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      items = {};
+    }
+  }
+
+  function persist() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+      saveError.classList.remove("show");
+    } catch (e) {
+      saveError.classList.add("show");
+    }
+  }
+
+  // ---- Feedback ----
+  function triggerFlash() {
+    readout.classList.add("flash");
+    setTimeout(() => readout.classList.remove("flash"), 380);
+  }
+
+  function beep() {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      const ctx = new Ctx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.13);
+    } catch (e) {}
+  }
+
+  function showReadout(name, count, delta, barcode) {
+    readoutIdle.style.display = "none";
+    readoutContent.style.display = "block";
+    readoutName.textContent = name;
+    readoutCount.textContent = String(count);
+    readoutDelta.textContent = delta > 0 ? `+${delta}` : delta < 0 ? String(delta) : "±0";
+    readoutDelta.style.color = delta > 0 ? "#39FF88" : delta < 0 ? "#FF6B4A" : "#8A8F82";
+    readoutBarcode.textContent = barcode;
+  }
+
+  // ---- Core scan handling ----
+  function processScan(rawCode) {
+    const code = String(rawCode).trim();
+    if (!code) return;
+    if (pendingBarcode) return; // naming modal already open
+
+    if (items[code]) {
+      const current = items[code];
+      const delta = mode === "add" ? 1 : -1;
+      const nextCount = Math.max(0, current.count + delta);
+      const actualDelta = nextCount - current.count;
+      items[code] = { ...current, count: nextCount };
+      persist();
+      renderTotals();
+      renderTable();
+      showReadout(current.name, nextCount, actualDelta, code);
+      triggerFlash();
+      beep();
+    } else {
+      pendingBarcode = code;
+      modalBarcode.textContent = code;
+      newItemName.value = "";
+      modalConfirmLabel.textContent = mode === "add" ? "Add item (count 1)" : "Add item (count 0)";
+      modalOverlay.classList.add("open");
+      setTimeout(() => newItemName.focus(), 30);
+    }
+  }
+
+  scanForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const code = scanInput.value.trim();
+    scanInput.value = "";
+    processScan(code);
+  });
+
+  newItemForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!pendingBarcode) return;
+    const name = newItemName.value.trim() || "Unnamed item";
+    const startCount = mode === "add" ? 1 : 0;
+    items[pendingBarcode] = { name, count: startCount };
+    persist();
+    renderTotals();
+    renderTable();
+    showReadout(name, startCount, startCount, pendingBarcode);
+    triggerFlash();
+    beep();
+    closeModal();
+  });
+
+  function closeModal() {
+    pendingBarcode = null;
+    modalOverlay.classList.remove("open");
+    scanInput.focus();
+  }
+  modalCancelBtn.addEventListener("click", closeModal);
+
+  // ---- Mode toggle ----
+  function setMode(next) {
+    mode = next;
+    modeAddBtn.classList.toggle("active-add", mode === "add");
+    modeRemoveBtn.classList.toggle("active-remove", mode === "remove");
+  }
+  modeAddBtn.addEventListener("click", () => setMode("add"));
+  modeRemoveBtn.addEventListener("click", () => setMode("remove"));
+
+  // ---- Table rendering ----
+  function renderTotals() {
+    const total = Object.values(items).reduce((s, v) => s + v.count, 0);
+    totalUnitsEl.textContent = String(total);
+  }
+
+  function iconBtn(svgPath, extraClass, title) {
+    return `<button class="icon-btn ${extraClass || ""}" title="${title}" data-action="${title}">${svgPath}</button>`;
+  }
+
+  function renderTable() {
+    const q = search.trim().toLowerCase();
+    const rows = Object.entries(items)
+      .filter(([barcode, v]) => !q || v.name.toLowerCase().includes(q) || barcode.includes(q))
+      .sort((a, b) => a[1].name.localeCompare(b[1].name));
+
+    if (rows.length === 0) {
+      tableWrap.style.display = "none";
+      emptyState.style.display = "block";
+      emptyState.textContent = Object.keys(items).length === 0
+        ? "No items yet. Scan a barcode above to start the list."
+        : "No items match your search.";
+      return;
+    }
+    tableWrap.style.display = "block";
+    emptyState.style.display = "none";
+
+    tableBody.innerHTML = rows.map(([barcode, v]) => {
+      const isEditing = editingBarcode === barcode;
+      const nameCell = isEditing
+        ? `<input class="edit-input" value="${escapeHtml(v.name)}" data-edit-input="${barcode}" />`
+        : escapeHtml(v.name);
+      return `
+        <tr>
+          <td data-name-cell="${barcode}">${nameCell}</td>
+          <td class="mono">${escapeHtml(barcode)}</td>
+          <td class="mono" style="text-align:right; font-weight:600;">${v.count}</td>
+          <td>
+            <div class="row-actions">
+              <button class="icon-btn" data-act="minus" data-code="${barcode}" title="Subtract one">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12h14"/></svg>
+              </button>
+              <button class="icon-btn" data-act="plus" data-code="${barcode}" title="Add one">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg>
+              </button>
+              ${isEditing
+                ? `<button class="icon-btn" data-act="save" data-code="${barcode}" title="Save name">
+                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+                   </button>`
+                : `<button class="icon-btn" data-act="edit" data-code="${barcode}" title="Rename">
+                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                   </button>`}
+              <button class="icon-btn danger" data-act="delete" data-code="${barcode}" title="Delete item">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>
+              </button>
+            </div>
+          </td>
+        </tr>`;
+    }).join("");
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  tableBody.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-act]");
+    if (!btn) return;
+    const code = btn.dataset.code;
+    const act = btn.dataset.act;
+    if (act === "minus") adjustCount(code, -1);
+    if (act === "plus") adjustCount(code, 1);
+    if (act === "edit") { editingBarcode = code; renderTable(); focusEditInput(code); }
+    if (act === "save") saveEdit(code);
+    if (act === "delete") deleteItem(code);
+  });
+
+  function focusEditInput(code) {
+    const input = tableBody.querySelector(`[data-edit-input="${cssEscape(code)}"]`);
+    if (input) {
+      input.focus();
+      input.select();
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") saveEdit(code);
+      });
+    }
+  }
+
+  function cssEscape(str) {
+    return String(str).replace(/["\\]/g, "\\$&");
+  }
+
+  function saveEdit(code) {
+    const input = tableBody.querySelector(`[data-edit-input="${cssEscape(code)}"]`);
+    const name = (input ? input.value.trim() : "") || items[code].name;
+    items[code] = { ...items[code], name };
+    persist();
+    editingBarcode = null;
+    renderTable();
+  }
+
+  function deleteItem(code) {
+    delete items[code];
+    persist();
+    renderTotals();
+    renderTable();
+  }
+
+  function adjustCount(code, delta) {
+    const current = items[code];
+    const nextCount = Math.max(0, current.count + delta);
+    items[code] = { ...current, count: nextCount };
+    persist();
+    renderTotals();
+    renderTable();
+  }
+
+  searchInput.addEventListener("input", (e) => {
+    search = e.target.value;
+    renderTable();
+  });
+
+  // ---- Reset ----
+  resetLinkBtn.addEventListener("click", () => {
+    resetLinkBtn.style.display = "none";
+    resetConfirm.style.display = "flex";
+  });
+  resetNoBtn.addEventListener("click", () => {
+    resetConfirm.style.display = "none";
+    resetLinkBtn.style.display = "inline";
+  });
+  resetYesBtn.addEventListener("click", () => {
+    items = {};
+    persist();
+    renderTotals();
+    renderTable();
+    readoutIdle.style.display = "flex";
+    readoutContent.style.display = "none";
+    resetConfirm.style.display = "none";
+    resetLinkBtn.style.display = "inline";
+  });
+
+  // ---- Export ----
+  exportBtn.addEventListener("click", () => {
+    if (typeof XLSX === "undefined") {
+      alert("Export library failed to load — check your internet connection and try again.");
+      return;
+    }
+    const rows = Object.entries(items)
+      .sort((a, b) => a[1].name.localeCompare(b[1].name))
+      .map(([barcode, v]) => ({ Barcode: barcode, Item: v.name, Count: v.count }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = [{ wch: 18 }, { wch: 32 }, { wch: 10 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Inventory");
+    const stamp = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `inventory-${stamp}.xlsx`);
+  });
+
+  // ---- Camera scanning ----
+  let stream = null;
+  let detector = null;
+  let rafId = null;
+  let lastScan = { code: null, time: 0 };
+  let cameraOpen = false;
+
+  function stopCamera() {
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = null;
+    if (stream) {
+      stream.getTracks().forEach((t) => t.stop());
+      stream = null;
+    }
+    cameraOpen = false;
+    cameraPanel.classList.remove("open");
+    cameraToggleBtn.classList.remove("active");
+    cameraToggleLabel.textContent = "Scan with camera";
+  }
+
+  function detectLoop() {
+    if (!cameraOpen || !detector || cameraVideo.readyState < 2) {
+      rafId = requestAnimationFrame(detectLoop);
+      return;
+    }
+    detector.detect(cameraVideo)
+      .then((codes) => {
+        if (codes && codes.length > 0 && !pendingBarcode) {
+          const value = codes[0].rawValue;
+          const now = Date.now();
+          if (!(lastScan.code === value && now - lastScan.time < SCAN_COOLDOWN_MS)) {
+            lastScan = { code: value, time: now };
+            processScan(value);
+          }
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        rafId = requestAnimationFrame(detectLoop);
+      });
+  }
+
+  async function startCamera() {
+    cameraError.textContent = "";
+    if (!("BarcodeDetector" in window)) {
+      cameraError.textContent = "This browser doesn't support live camera scanning. Try Chrome/Android, or use the scan box below instead.";
+      return;
+    }
+    try {
+      detector = new window.BarcodeDetector({ formats: BARCODE_FORMATS });
+    } catch (e) {
+      cameraError.textContent = "Couldn't start the barcode detector on this device. Use the scan box instead.";
+      return;
+    }
+    try {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } } });
+      } catch (e) {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
+      cameraVideo.srcObject = stream;
+      await cameraVideo.play().catch(() => {});
+      cameraOpen = true;
+      cameraPanel.classList.add("open");
+      cameraToggleBtn.classList.add("active");
+      cameraToggleLabel.textContent = "Stop camera";
+      rafId = requestAnimationFrame(detectLoop);
+    } catch (e) {
+      cameraError.textContent = "Camera access was denied or unavailable. Check your browser/site camera permission.";
+    }
+  }
+
+  cameraToggleBtn.addEventListener("click", () => {
+    if (cameraOpen) stopCamera();
+    else startCamera();
+  });
+
+  window.addEventListener("beforeunload", stopCamera);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden && cameraOpen) stopCamera();
+  });
+
+  // ---- Init ----
+  load();
+  setMode("add");
+  renderTotals();
+  renderTable();
+  scanInput.focus();
+})();
+
+</script>
+</body>
+</html>
