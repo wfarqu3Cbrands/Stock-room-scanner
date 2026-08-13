@@ -1,0 +1,1969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<title>Stockroom Scanner</title>
+<meta name="theme-color" content="#1B140E" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Stockroom" />
+<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/@zxing/browser@latest"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #1B140E;
+  color: #F0E3CA;
+  font-family: 'Archivo', sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  padding: max(24px, env(safe-area-inset-top)) 16px calc(48px + env(safe-area-inset-bottom));
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+input::placeholder { color: #8A7355; }
+button { font-family: inherit; cursor: pointer; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.frame { width: 100%; max-width: 640px; }
+
+/* Header */
+.header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 20px; }
+.eyebrow { font-size: 11px; letter-spacing: 0.14em; color: #D3A23E; font-weight: 700; margin-bottom: 4px; }
+.title { font-size: 30px; font-weight: 800; margin: 0; letter-spacing: -0.02em; }
+.total-badge { text-align: right; }
+.total-num {
+  display: block; font-family: 'IBM Plex Mono', monospace; font-size: 28px;
+  font-weight: 600; color: #C8863E; line-height: 1;
+}
+.total-label { font-size: 11px; color: #A68F6C; letter-spacing: 0.04em; }
+
+/* Mode toggle */
+.toggle-row {
+  display: flex; gap: 8px; margin-bottom: 12px; background: #2A2013;
+  padding: 5px; border-radius: 12px; border: 1px solid #3D2E1D;
+}
+.toggle-btn {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 12px 10px; border-radius: 8px; border: none; background: transparent;
+  color: #A68F6C; font-weight: 700; font-size: 13px; letter-spacing: 0.03em;
+}
+.toggle-btn.active-add { background: #3A2712; color: #C8863E; }
+.toggle-btn.active-remove { background: #3A1710; color: #C1573D; }
+
+/* Camera */
+.camera-toggle-btn {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px 10px; border-radius: 10px; border: 1px dashed #4A3620; background: transparent;
+  color: #CBB694; font-weight: 700; font-size: 13px; margin-bottom: 4px;
+}
+.camera-toggle-btn.active {
+  border: 1px solid #3A1710; background: #2E1B10; color: #C1573D;
+}
+.camera-error-text { margin: 8px 0 0; font-size: 12.5px; color: #DE9575; line-height: 1.5; }
+.camera-panel {
+  position: relative; border-radius: 12px; overflow: hidden; margin: 12px 0;
+  background: #000; border: 1px solid #3D2E1D; aspect-ratio: 4 / 3; display: none;
+}
+.camera-panel.open { display: block; }
+.camera-video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.camera-overlay { position: absolute; inset: 18% 12%; pointer-events: none; }
+.camera-hint {
+  position: absolute; bottom: 10px; left: 0; right: 0; text-align: center;
+  font-size: 12px; color: #F0E3CA; text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+}
+
+/* Scan target */
+.scan-wrap { margin-bottom: 16px; }
+.scan-target { position: relative; padding: 4px; }
+.corner { position: absolute; width: 18px; height: 18px; border-color: #D3A23E; }
+.corner.tl { top: 0; left: 0; border-top: 3px solid; border-left: 3px solid; border-top-left-radius: 6px; }
+.corner.tr { top: 0; right: 0; border-top: 3px solid; border-right: 3px solid; border-top-right-radius: 6px; }
+.corner.bl { bottom: 0; left: 0; border-bottom: 3px solid; border-left: 3px solid; border-bottom-left-radius: 6px; }
+.corner.br { bottom: 0; right: 0; border-bottom: 3px solid; border-right: 3px solid; border-bottom-right-radius: 6px; }
+.scan-input {
+  width: 100%; background: #241B12; border: 1px solid #4A3620; border-radius: 10px;
+  padding: 18px 16px; font-size: 17px; color: #F0E3CA; font-family: 'IBM Plex Mono', monospace; outline: none;
+}
+
+/* LED readout */
+.readout {
+  background: #140F09; border: 2px solid #3D2E1D; border-radius: 12px; padding: 18px 20px;
+  margin-bottom: 16px; transition: border-color .15s ease, box-shadow .15s ease; min-height: 88px;
+}
+.readout.flash { border-color: #C8863E; box-shadow: 0 0 24px rgba(200,134,62,0.35); }
+.readout-idle { display: flex; align-items: center; gap: 10px; color: #7A6448; font-size: 14px; height: 52px; }
+.readout-name {
+  font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #E0B67A; margin-bottom: 4px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.readout-row { display: flex; align-items: baseline; gap: 12px; }
+.readout-count { font-family: 'IBM Plex Mono', monospace; font-size: 40px; font-weight: 600; color: #C8863E; line-height: 1; }
+.readout-delta { font-family: 'IBM Plex Mono', monospace; font-size: 16px; font-weight: 600; }
+.readout-barcode { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #7A6448; margin-top: 6px; }
+
+.locations-summary-btn {
+  display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%;
+  padding: 9px 12px; margin-top: 10px; border-radius: 8px; border: 1px solid #4A3620;
+  background: transparent; color: #A68F6C; font-size: 12.5px; font-weight: 600;
+}
+.location-totals-list { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }
+.location-totals-row {
+  display: flex; justify-content: space-between; align-items: center; padding: 10px 12px;
+  border: 1px solid #3D2E1D; border-radius: 8px; background: #1B140E;
+}
+.location-totals-name { font-size: 13.5px; color: #F0E3CA; }
+.location-totals-count { font-family: 'IBM Plex Mono', monospace; font-size: 15px; font-weight: 700; color: #D3A23E; }
+
+.undo-btn {
+  display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%;
+  padding: 10px 12px; margin-top: 10px; border-radius: 8px; border: 1px solid #4A3620;
+  background: #241B12; color: #D3A23E; font-size: 13px; font-weight: 700;
+}
+
+.low-stock-tag {
+  display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+  color: #F0E3CA; background: #C1573D; border-radius: 5px; padding: 2px 6px; margin-left: 6px;
+}
+.item-card.low-stock { border-color: #C1573D; }
+.item-card.low-stock .count-num { color: #C1573D; }
+
+.error-banner { background: #3A1710; color: #DE9575; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; display: none; }
+.error-banner.show { display: block; }
+
+/* Modal */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(10,10,8,0.72); display: none;
+  align-items: center; justify-content: center; padding: 20px; z-index: 50;
+}
+.modal-overlay.open { display: flex; }
+.modal { background: #241B12; border: 1px solid #4A3620; border-radius: 14px; padding: 24px; width: 100%; max-width: 380px; }
+.modal-eyebrow { font-size: 11px; letter-spacing: 0.12em; color: #D3A23E; font-weight: 700; margin-bottom: 6px; }
+.modal-barcode { font-family: 'IBM Plex Mono', monospace; font-size: 20px; margin-bottom: 18px; }
+.modal-label { display: block; font-size: 12px; color: #A68F6C; margin-bottom: 6px; }
+.modal-input {
+  width: 100%; background: #1B140E; border: 1px solid #4A3620; border-radius: 8px;
+  padding: 12px 14px; font-size: 15px; color: #F0E3CA; margin-bottom: 18px; outline: none;
+}
+.modal-textarea { font-family: 'Archivo', sans-serif; resize: vertical; min-height: 64px; line-height: 1.4; }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.modal-cancel {
+  display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-radius: 8px;
+  border: 1px solid #4A3620; background: transparent; color: #A68F6C; font-size: 13px; font-weight: 600;
+}
+.modal-confirm {
+  display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-radius: 8px;
+  border: none; background: #D3A23E; color: #241B12; font-size: 13px; font-weight: 700;
+}
+.modal-confirm.danger { background: #C1573D; color: #F0E3CA; }
+.modal-actions button { flex: 1; justify-content: center; }
+
+/* Table */
+.table-section { margin-top: 8px; }
+.table-header-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.sort-row { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; }
+.sort-label { font-size: 12px; color: #7A6448; margin-right: 2px; }
+.sort-btn {
+  padding: 6px 12px; border-radius: 999px; border: 1px solid #3D2E1D; background: #1B140E;
+  color: #A68F6C; font-size: 12.5px; font-weight: 600;
+}
+.sort-btn.active-sort { background: #3A2712; border-color: #4A3620; color: #D3A23E; }
+.sort-dir-btn {
+  margin-left: auto; width: 30px; height: 30px; border-radius: 8px; border: 1px solid #3D2E1D;
+  background: #1B140E; color: #A68F6C; display: flex; align-items: center; justify-content: center;
+}
+.sort-dir-btn svg { transition: transform 0.15s; }
+.sort-dir-btn.desc svg { transform: rotate(180deg); }
+.search-input {
+  flex: 1; background: #241B12; border: 1px solid #3D2E1D; border-radius: 8px;
+  padding: 10px 12px; font-size: 14px; color: #F0E3CA; outline: none; min-width: 0;
+}
+.table-footer-row { display: flex; gap: 8px; margin-top: 12px; }
+.export-btn {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px; border-radius: 8px;
+  border: none; background: #C8863E; color: #241407; font-size: 13px; font-weight: 700; white-space: nowrap;
+}
+.import-btn {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px; border-radius: 8px;
+  border: 1px solid #4A3620; background: #241B12; color: #D3A23E; font-size: 13px; font-weight: 700; white-space: nowrap;
+}
+
+.photo-frame {
+  width: 100%; aspect-ratio: 4 / 3; border-radius: 10px; border: 1px dashed #4A3620;
+  background: #14100A; display: flex; align-items: center; justify-content: center;
+  overflow: hidden; margin-bottom: 14px;
+}
+.photo-preview-img { width: 100%; height: 100%; object-fit: cover; }
+.photo-empty-text { color: #7A6448; font-size: 13px; }
+.photo-actions { display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
+.location-remove-link {
+  display: block; background: none; border: none; color: #C1573D; font-size: 12.5px;
+  text-align: center; padding: 4px 0; text-decoration: underline;
+}
+.photo-thumb { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0; border: 1px solid #4A3620; }
+
+.variant-list { display: flex; flex-direction: column; gap: 8px; max-height: 260px; overflow-y: auto; }
+.variant-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 12px; border: 1px solid #3D2E1D; border-radius: 8px; background: #1B140E;
+}
+.variant-row-name { font-size: 13.5px; color: #F0E3CA; }
+.variant-row-count { font-size: 11.5px; color: #7A6448; margin-top: 2px; }
+.variant-remove-btn {
+  width: 30px; height: 30px; flex-shrink: 0; border-radius: 8px; border: 1px solid #3A1710;
+  background: #241B12; color: #C1573D; font-size: 16px; line-height: 1;
+}
+.variant-add-row { display: flex; gap: 8px; }
+.variant-add-btn {
+  padding: 0 16px; border-radius: 8px; border: none; background: #D3A23E; color: #241B12;
+  font-size: 13px; font-weight: 700; white-space: nowrap;
+}
+
+.variant-pick-list { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; margin-bottom: 4px; }
+.variant-pick-btn {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 14px; border-radius: 10px; border: 1px solid #4A3620; background: #1B140E; color: #F0E3CA;
+}
+.variant-pick-name { font-size: 14.5px; font-weight: 600; text-align: left; }
+.variant-pick-count { font-family: 'IBM Plex Mono', monospace; font-size: 15px; font-weight: 700; color: #D3A23E; flex-shrink: 0; }
+.import-summary { font-size: 13.5px; color: #CBB694; line-height: 1.5; margin-bottom: 16px; }
+.import-options { display: flex; flex-direction: column; gap: 10px; }
+.import-option {
+  text-align: left; padding: 14px; border-radius: 10px; border: 1px solid #4A3620;
+  background: #1B140E; color: #F0E3CA; display: flex; flex-direction: column; gap: 4px;
+}
+.import-option strong { font-size: 13.5px; }
+.import-option span { font-size: 12px; color: #A68F6C; line-height: 1.4; }
+.import-option.danger { border-color: #3A1710; }
+.import-option.danger strong { color: #DE9575; }
+.empty-state {
+  padding: 32px 16px; text-align: center; color: #7A6448; font-size: 14px;
+  border: 1px dashed #3D2E1D; border-radius: 10px;
+}
+.item-list { display: flex; flex-direction: column; gap: 8px; }
+.item-card { border: 1px solid #3D2E1D; border-radius: 12px; background: #221A11; padding: 12px 14px; }
+.item-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.item-name-cell { display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 600; flex-wrap: wrap; }
+.item-card-meta { font-size: 11.5px; color: #7A6448; margin-top: 3px; }
+.item-card-meta .mono { color: #7A6448; }
+.item-card-meta .loc-text { color: #CBA36B; }
+.mono { font-family: 'IBM Plex Mono', monospace; color: #CBB694; }
+.note-dot { width: 6px; height: 6px; border-radius: 50%; background: #D3A23E; flex-shrink: 0; }
+.loc-dot { width: 6px; height: 6px; border-radius: 50%; background: #C8863E; flex-shrink: 0; }
+
+.count-controls { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.count-btn {
+  width: 34px; height: 34px; border-radius: 9px; border: 1px solid #3D2E1D; background: #1B140E;
+  color: #CBB694; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.count-num {
+  font-family: 'IBM Plex Mono', monospace; font-size: 19px; font-weight: 600; min-width: 30px; text-align: center;
+  background: none; border: none; color: #F0E3CA; padding: 4px 2px; border-radius: 6px;
+}
+
+.item-card-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; margin-top: 10px; }
+.icon-btn {
+  flex: 1 1 30%; height: 32px; display: flex; align-items: center; justify-content: center;
+  border-radius: 8px; border: 1px solid #3D2E1D; background: #241B12; color: #CBB694;
+}
+.icon-btn.danger { border-color: #3A1710; color: #C1573D; }
+.icon-btn.has-note { border-color: #D3A23E; color: #D3A23E; }
+.edit-input {
+  width: 100%; background: #1B140E; border: 1px solid #4A3620; border-radius: 6px;
+  padding: 8px 10px; font-size: 15px; color: #F0E3CA; outline: none;
+}
+
+.location-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: -8px 0 18px; }
+.location-chips:empty { margin: 0; }
+.location-chips-label { width: 100%; font-size: 11px; color: #7A6448; margin: -8px 0 4px; }
+.location-chip {
+  display: flex; align-items: center; gap: 5px; border-radius: 999px;
+  border: 1px solid #4A3620; background: #1B140E; overflow: hidden;
+}
+.location-chip-select {
+  border: none; background: none; color: #CBB694; font-size: 12.5px; padding: 6px 4px 6px 12px;
+}
+.location-chip-remove {
+  border: none; background: none; color: #7A6448; font-size: 13px; line-height: 1; padding: 6px 10px 6px 2px;
+}
+
+/* Footer */
+.footer { margin-top: 24px; text-align: center; }
+.reset-link { background: none; border: none; color: #7A6448; font-size: 12px; text-decoration: underline; }
+.reset-confirm { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: #A68F6C; }
+.reset-yes { background: #3A1710; color: #DE9575; border: none; border-radius: 6px; padding: 6px 10px; font-size: 12px; }
+.reset-no { background: transparent; color: #A68F6C; border: 1px solid #3D2E1D; border-radius: 6px; padding: 6px 10px; font-size: 12px; }
+
+/* Install banner */
+.install-banner {
+  display: none; align-items: center; justify-content: space-between; gap: 10px;
+  background: #2A2013; border: 1px solid #3D2E1D; border-radius: 10px; padding: 10px 14px;
+  margin-bottom: 16px; font-size: 12.5px; color: #CBB694;
+}
+.install-banner.show { display: flex; }
+.install-btn { background: #D3A23E; color: #241B12; border: none; border-radius: 6px; padding: 8px 12px; font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+
+svg { display: block; }
+
+</style>
+</head>
+<body>
+  <div class="frame">
+    <!-- Header -->
+    <div class="header">
+      <div>
+        <div class="eyebrow">STOCKROOM · LIVE COUNT</div>
+        <h1 class="title">Scanner</h1>
+      </div>
+      <div class="total-badge">
+        <span class="total-num" id="totalUnits">0</span>
+        <span class="total-label">units on hand</span>
+      </div>
+    </div>
+    <button class="locations-summary-btn" id="locationsSummaryBtn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+      View totals by location
+    </button>
+
+    <!-- Mode toggle -->
+    <div class="toggle-row" role="group" aria-label="Scan mode">
+      <button class="toggle-btn active-add" id="modeAddBtn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg>
+        ADD STOCK
+      </button>
+      <button class="toggle-btn" id="modeRemoveBtn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12h14"/></svg>
+        REMOVE STOCK
+      </button>
+    </div>
+
+    <!-- Camera -->
+    <button class="camera-toggle-btn" id="cameraToggleBtn">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      <span id="cameraToggleLabel">Scan with camera</span>
+    </button>
+    <div class="camera-error-text" id="cameraError"></div>
+
+    <div class="camera-panel" id="cameraPanel">
+      <video id="cameraVideo" class="camera-video" muted playsinline autoplay></video>
+      <div class="camera-overlay">
+        <span class="corner tl"></span><span class="corner tr"></span>
+        <span class="corner bl"></span><span class="corner br"></span>
+      </div>
+      <div class="camera-hint">Hold a barcode inside the frame</div>
+    </div>
+
+    <!-- Manual scan input -->
+    <form class="scan-wrap" id="scanForm">
+      <div class="scan-target">
+        <span class="corner tl"></span><span class="corner tr"></span>
+        <span class="corner bl"></span><span class="corner br"></span>
+        <input class="scan-input" id="scanInput" placeholder="Scan or type barcode, then Enter" autocomplete="off" />
+      </div>
+    </form>
+
+    <!-- LED readout -->
+    <div class="readout" id="readout">
+      <div class="readout-idle" id="readoutIdle">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        Ready to scan
+      </div>
+      <div id="readoutContent" style="display:none;">
+        <div class="readout-name" id="readoutName"></div>
+        <div class="readout-row">
+          <span class="readout-count" id="readoutCount"></span>
+          <span class="readout-delta" id="readoutDelta"></span>
+        </div>
+        <div class="readout-barcode" id="readoutBarcode"></div>
+      </div>
+    </div>
+
+    <button class="undo-btn" id="undoBtn" style="display:none;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+      <span id="undoLabel">Undo last change</span>
+    </button>
+
+    <div class="error-banner" id="saveError">Couldn't save last change — check that your browser allows local storage.</div>
+
+    <!-- New item modal -->
+    <div class="modal-overlay" id="modalOverlay">
+      <form class="modal" id="newItemForm">
+        <div class="modal-eyebrow">NEW BARCODE</div>
+        <div class="modal-barcode" id="modalBarcode"></div>
+        <label class="modal-label" for="newItemName">Item name</label>
+        <input class="modal-input" id="newItemName" placeholder="e.g. 9mm Hex Bolt, box of 50" />
+        <label class="modal-label" for="newItemNotes">Notes (optional)</label>
+        <textarea class="modal-input modal-textarea" id="newItemNotes" placeholder="e.g. Shelf B3, reorder from Acme Supply"></textarea>
+        <label class="modal-label" for="newItemLocationInput">Location (optional)</label>
+        <input class="modal-input" id="newItemLocationInput" placeholder="e.g. Shelf A1" />
+        <div class="location-chips" id="newItemLocationChips"></div>
+        <label class="modal-label" for="newItemThreshold">Low stock alert (optional)</label>
+        <input class="modal-input" id="newItemThreshold" type="number" inputmode="numeric" min="0" placeholder="Alert when count falls to or below…" />
+        <label class="modal-label" for="newItemBatch">Batch / lot number (optional)</label>
+        <input class="modal-input" id="newItemBatch" placeholder="e.g. Batch 12, Barrel 47" />
+        <div class="modal-actions">
+          <button type="button" class="modal-cancel" id="modalCancelBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            Cancel
+          </button>
+          <button type="submit" class="modal-confirm" id="modalConfirmBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+            <span id="modalConfirmLabel">Add item</span>
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Location modal -->
+    <div class="modal-overlay" id="locationModalOverlay">
+      <div class="modal">
+        <div class="modal-eyebrow">LOCATION</div>
+        <div class="modal-barcode" id="locationModalTitle"></div>
+        <label class="modal-label" for="locationInput">Location</label>
+        <input class="modal-input" id="locationInput" placeholder="e.g. Shelf A1" />
+        <div class="location-chips" id="locationChips"></div>
+        <div class="modal-actions" style="margin-top:16px;">
+          <button type="button" class="modal-cancel" id="locationCancelBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            Cancel
+          </button>
+          <button type="button" class="modal-confirm" id="locationSaveBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+            Save location
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notes modal -->
+    <div class="modal-overlay" id="notesModalOverlay">
+      <form class="modal" id="notesForm">
+        <div class="modal-eyebrow">NOTES</div>
+        <div class="modal-barcode" id="notesModalTitle"></div>
+        <textarea class="modal-input modal-textarea" id="notesTextarea" placeholder="e.g. Shelf B3, reorder from Acme Supply"></textarea>
+        <div class="modal-actions">
+          <button type="button" class="modal-cancel" id="notesCancelBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            Cancel
+          </button>
+          <button type="submit" class="modal-confirm">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+            Save notes
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Photo modal -->
+    <div class="modal-overlay" id="photoModalOverlay">
+      <div class="modal">
+        <div class="modal-eyebrow">ITEM PHOTO</div>
+        <div class="modal-barcode" id="photoModalTitle"></div>
+        <div class="photo-frame" id="photoFrame">
+          <img class="photo-preview-img" id="photoPreviewImg" style="display:none;" />
+          <span class="photo-empty-text" id="photoEmptyText">No photo yet</span>
+        </div>
+        <input type="file" id="photoFileInput" accept="image/*" capture="environment" style="display:none;" />
+        <div class="photo-actions">
+          <button type="button" class="import-btn" id="photoTakeBtn" style="flex:1;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            <span id="photoTakeLabel">Take / choose photo</span>
+          </button>
+          <button type="button" class="location-remove-link" id="photoRemoveBtn" style="display:none;">Remove photo</button>
+        </div>
+        <div class="modal-actions" style="margin-top:14px;">
+          <button type="button" class="modal-cancel" id="photoCancelBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            Cancel
+          </button>
+          <button type="button" class="modal-confirm" id="photoSaveBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+            Save photo
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Threshold modal -->
+    <div class="modal-overlay" id="thresholdModalOverlay">
+      <form class="modal" id="thresholdForm">
+        <div class="modal-eyebrow">LOW STOCK ALERT</div>
+        <div class="modal-barcode" id="thresholdModalTitle"></div>
+        <label class="modal-label" for="thresholdInput">Alert when count falls to or below</label>
+        <input class="modal-input" id="thresholdInput" type="number" inputmode="numeric" min="0" placeholder="e.g. 6" />
+        <div class="modal-actions">
+          <button type="button" class="modal-cancel" id="thresholdCancelBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            Cancel
+          </button>
+          <button type="submit" class="modal-confirm">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+            Save alert
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Batch/lot modal -->
+    <div class="modal-overlay" id="batchModalOverlay">
+      <form class="modal" id="batchForm">
+        <div class="modal-eyebrow">BATCH / LOT NUMBER</div>
+        <div class="modal-barcode" id="batchModalTitle"></div>
+        <label class="modal-label" for="batchInput">Batch / lot number</label>
+        <input class="modal-input" id="batchInput" placeholder="e.g. Batch 12, Barrel 47" />
+        <div class="modal-actions">
+          <button type="button" class="modal-cancel" id="batchCancelBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            Cancel
+          </button>
+          <button type="submit" class="modal-confirm">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+            Save batch
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Manage variations (split barcode) modal -->
+    <div class="modal-overlay" id="splitModalOverlay">
+      <div class="modal">
+        <div class="modal-eyebrow">BATCH VARIATIONS ON THIS BARCODE</div>
+        <div class="modal-barcode" id="splitModalTitle"></div>
+        <div class="modal-label" style="margin-bottom:10px;">This barcode covers more than one batch of the same product. Add each batch/lot number below — the product name stays the same, only the batch differs. Scanning this barcode will then ask which batch you mean. Tap the batch icon on any of them below in the list to set or change its location, notes, etc.</div>
+        <div class="variant-list" id="variantList"></div>
+        <div class="variant-add-row">
+          <input class="modal-input" id="newVariantInput" placeholder="e.g. Batch 14" style="margin-bottom:0;" />
+          <button type="button" class="variant-add-btn" id="addVariantBtn">Add batch</button>
+        </div>
+        <div class="modal-actions" style="margin-top:16px;">
+          <button type="button" class="modal-cancel" id="splitCloseBtn" style="flex:1;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Which variation? (scan-time disambiguation) -->
+    <div class="modal-overlay" id="disambigModalOverlay">
+      <div class="modal">
+        <div class="modal-eyebrow">WHICH ONE DID YOU SCAN?</div>
+        <div class="modal-barcode" id="disambigModalTitle"></div>
+        <div class="variant-pick-list" id="disambigList"></div>
+        <div class="modal-actions" style="margin-top:16px;">
+          <button type="button" class="modal-cancel" id="disambigCancelBtn" style="flex:1;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Adjust quantity modal -->
+    <div class="modal-overlay" id="adjustModalOverlay">
+      <form class="modal" id="adjustForm">
+        <div class="modal-eyebrow">ADJUST QUANTITY</div>
+        <div class="modal-barcode" id="adjustModalTitle"></div>
+        <label class="modal-label" for="adjustAmountInput">Amount</label>
+        <input class="modal-input" id="adjustAmountInput" type="number" inputmode="numeric" min="0" placeholder="e.g. 24" />
+        <div class="modal-actions">
+          <button type="button" class="modal-cancel" id="adjustCancelBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            Cancel
+          </button>
+          <button type="button" class="modal-confirm danger" id="adjustSubtractBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12h14"/></svg>
+            Subtract
+          </button>
+          <button type="submit" class="modal-confirm" id="adjustAddBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg>
+            Add
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Location totals modal -->
+    <div class="modal-overlay" id="locationTotalsModalOverlay">
+      <div class="modal">
+        <div class="modal-eyebrow">TOTALS BY LOCATION</div>
+        <div class="modal-barcode" style="margin-bottom:14px;">Bottle counts across all locations</div>
+        <div class="location-totals-list" id="locationTotalsList"></div>
+        <div class="modal-actions" style="margin-top:16px;">
+          <button type="button" class="modal-cancel" id="locationTotalsCloseBtn" style="flex:1;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Import modal -->
+    <div class="modal-overlay" id="importModalOverlay">
+      <div class="modal">
+        <div class="modal-eyebrow">IMPORT SPREADSHEET</div>
+        <div class="import-summary" id="importSummaryText"></div>
+        <div class="import-options">
+          <button class="import-option" id="importMergeBtn">
+            <strong>Merge into current inventory</strong>
+            <span>Adds new items and updates counts/names for barcodes that already exist. Anything not in the file is left alone.</span>
+          </button>
+          <button class="import-option danger" id="importReplaceBtn">
+            <strong>Replace everything</strong>
+            <span>Clears your current inventory first, then loads only what's in the file.</span>
+          </button>
+        </div>
+        <div class="modal-actions" style="margin-top:14px;">
+          <button type="button" class="modal-cancel" id="importCancelBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-section">
+      <div class="table-header-row">
+        <input class="search-input" id="searchInput" placeholder="Search items or barcode…" />
+      </div>
+      <div class="sort-row">
+        <span class="sort-label">Sort:</span>
+        <button class="sort-btn active-sort" id="sortNameBtn" data-field="name">Name</button>
+        <button class="sort-btn" id="sortCountBtn" data-field="count">Qty</button>
+        <button class="sort-dir-btn" id="sortDirBtn" title="Reverse order">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" id="sortDirIcon"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+        </button>
+      </div>
+      <div class="empty-state" id="emptyState">No items yet. Scan a barcode above to start the list.</div>
+      <div class="item-list" id="tableWrap" style="display:none;">
+        <div id="tableBody"></div>
+      </div>
+      <div class="table-footer-row">
+        <button class="import-btn" id="importBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+          Import
+        </button>
+        <input type="file" id="importInput" accept=".xlsx,.xls,.csv" style="display:none;" />
+        <button class="export-btn" id="exportBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          Export
+        </button>
+      </div>
+    </div>
+
+    <div class="footer">
+      <button class="reset-link" id="resetLinkBtn">Clear all data</button>
+      <div class="reset-confirm" id="resetConfirm" style="display:none;">
+        <span>Clear everything — items, counts, locations, photos, and batch/variation setups? This can't be undone.</span>
+        <button class="reset-yes" id="resetYesBtn">Yes, clear it</button>
+        <button class="reset-no" id="resetNoBtn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  
+
+<script>
+(function () {
+  "use strict";
+
+  const STORAGE_KEY = "stockroom-inventory-v1";
+  const LOCATIONS_KEY = "stockroom-locations-v1";
+  const PHOTOS_KEY = "stockroom-photos-v1"; // separate from items — survives "Replace everything" imports
+  const SHARED_KEY = "stockroom-shared-v1"; // { physicalBarcode: [variantBarcode, ...] } — barcodes shared across variations
+  const SCAN_COOLDOWN_MS = 1500;
+  const BARCODE_FORMATS = ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "codabar", "itf", "qr_code"];
+
+  // ---- State ----
+  let items = {}; // { barcode: { name, count, notes, location } }
+  let locations = []; // ["Shelf A1", "Warehouse B", ...]
+  let photos = {}; // { barcode: "data:image/jpeg;base64,..." } — permanent barcode-keyed photo library
+  let sharedGroups = {}; // { physicalBarcode: [variantBarcode1, variantBarcode2, ...] }
+  let mode = "add"; // 'add' | 'remove'
+  let pendingBarcode = null;
+  let search = "";
+  let sortField = "name"; // 'name' | 'count'
+  let sortDir = "asc"; // 'asc' | 'desc'
+  let editingBarcode = null;
+  let lastAction = null; // { barcode, prevState: null | {...item} }
+
+  // ---- Elements ----
+  const el = (id) => document.getElementById(id);
+  const totalUnitsEl = el("totalUnits");
+  const modeAddBtn = el("modeAddBtn");
+  const modeRemoveBtn = el("modeRemoveBtn");
+  const cameraToggleBtn = el("cameraToggleBtn");
+  const cameraToggleLabel = el("cameraToggleLabel");
+  const cameraError = el("cameraError");
+  const cameraPanel = el("cameraPanel");
+  const cameraVideo = el("cameraVideo");
+  const scanForm = el("scanForm");
+  const scanInput = el("scanInput");
+  const readout = el("readout");
+  const readoutIdle = el("readoutIdle");
+  const readoutContent = el("readoutContent");
+  const readoutName = el("readoutName");
+  const readoutCount = el("readoutCount");
+  const readoutDelta = el("readoutDelta");
+  const readoutBarcode = el("readoutBarcode");
+  const undoBtn = el("undoBtn");
+  const undoLabel = el("undoLabel");
+  const locationsSummaryBtn = el("locationsSummaryBtn");
+  const locationTotalsModalOverlay = el("locationTotalsModalOverlay");
+  const locationTotalsList = el("locationTotalsList");
+  const locationTotalsCloseBtn = el("locationTotalsCloseBtn");
+  const saveError = el("saveError");
+  const modalOverlay = el("modalOverlay");
+  const newItemForm = el("newItemForm");
+  const modalBarcode = el("modalBarcode");
+  const newItemName = el("newItemName");
+  const newItemNotes = el("newItemNotes");
+  const newItemLocationInput = el("newItemLocationInput");
+  const newItemLocationChips = el("newItemLocationChips");
+  const newItemThreshold = el("newItemThreshold");
+  const newItemBatch = el("newItemBatch");
+  const modalCancelBtn = el("modalCancelBtn");
+  const modalConfirmLabel = el("modalConfirmLabel");
+  const thresholdModalOverlay = el("thresholdModalOverlay");
+  const thresholdForm = el("thresholdForm");
+  const thresholdModalTitle = el("thresholdModalTitle");
+  const thresholdInput = el("thresholdInput");
+  const thresholdCancelBtn = el("thresholdCancelBtn");
+  let thresholdEditingBarcode = null;
+  const batchModalOverlay = el("batchModalOverlay");
+  const batchForm = el("batchForm");
+  const batchModalTitle = el("batchModalTitle");
+  const batchInput = el("batchInput");
+  const batchCancelBtn = el("batchCancelBtn");
+  let batchEditingBarcode = null;
+
+  const splitModalOverlay = el("splitModalOverlay");
+  const splitModalTitle = el("splitModalTitle");
+  const variantList = el("variantList");
+  const newVariantInput = el("newVariantInput");
+  const addVariantBtn = el("addVariantBtn");
+  const splitCloseBtn = el("splitCloseBtn");
+  let splitPhysicalBarcode = null;
+
+  const disambigModalOverlay = el("disambigModalOverlay");
+  const disambigModalTitle = el("disambigModalTitle");
+  const disambigList = el("disambigList");
+  const disambigCancelBtn = el("disambigCancelBtn");
+  let disambigPhysicalBarcode = null;
+  const adjustModalOverlay = el("adjustModalOverlay");
+  const adjustForm = el("adjustForm");
+  const adjustModalTitle = el("adjustModalTitle");
+  const adjustAmountInput = el("adjustAmountInput");
+  const adjustCancelBtn = el("adjustCancelBtn");
+  const adjustSubtractBtn = el("adjustSubtractBtn");
+  let adjustEditingBarcode = null;
+  const searchInput = el("searchInput");
+  const sortNameBtn = el("sortNameBtn");
+  const sortCountBtn = el("sortCountBtn");
+  const sortDirBtn = el("sortDirBtn");
+  const exportBtn = el("exportBtn");
+  const emptyState = el("emptyState");
+  const tableWrap = el("tableWrap");
+  const tableBody = el("tableBody");
+  const resetLinkBtn = el("resetLinkBtn");
+  const resetConfirm = el("resetConfirm");
+  const resetYesBtn = el("resetYesBtn");
+  const resetNoBtn = el("resetNoBtn");
+  const notesModalOverlay = el("notesModalOverlay");
+  const notesForm = el("notesForm");
+  const notesModalTitle = el("notesModalTitle");
+  const notesTextarea = el("notesTextarea");
+  const notesCancelBtn = el("notesCancelBtn");
+  let notesEditingBarcode = null;
+
+  const locationModalOverlay = el("locationModalOverlay");
+  const locationModalTitle = el("locationModalTitle");
+  const locationInput = el("locationInput");
+  const locationChips = el("locationChips");
+  const locationCancelBtn = el("locationCancelBtn");
+  const locationSaveBtn = el("locationSaveBtn");
+  let locationEditingBarcode = null;
+
+  const photoModalOverlay = el("photoModalOverlay");
+  const photoModalTitle = el("photoModalTitle");
+  const photoPreviewImg = el("photoPreviewImg");
+  const photoEmptyText = el("photoEmptyText");
+  const photoFileInput = el("photoFileInput");
+  const photoTakeBtn = el("photoTakeBtn");
+  const photoRemoveBtn = el("photoRemoveBtn");
+  const photoCancelBtn = el("photoCancelBtn");
+  const photoSaveBtn = el("photoSaveBtn");
+  let photoEditingBarcode = null;
+  let pendingPhotoDataUrl = undefined; // undefined = no change, null = remove, string = new photo
+
+  const installBanner = el("installBanner");
+  const installBtn = el("installBtn");
+
+  // ---- Persistence (localStorage — this device only) ----
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      items = raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      items = {};
+    }
+    try {
+      const rawLoc = localStorage.getItem(LOCATIONS_KEY);
+      locations = rawLoc ? JSON.parse(rawLoc) : [];
+    } catch (e) {
+      locations = [];
+    }
+    try {
+      const rawPhotos = localStorage.getItem(PHOTOS_KEY);
+      photos = rawPhotos ? JSON.parse(rawPhotos) : {};
+    } catch (e) {
+      photos = {};
+    }
+    try {
+      const rawShared = localStorage.getItem(SHARED_KEY);
+      sharedGroups = rawShared ? JSON.parse(rawShared) : {};
+    } catch (e) {
+      sharedGroups = {};
+    }
+  }
+
+  function persistLocations() {
+    try {
+      localStorage.setItem(LOCATIONS_KEY, JSON.stringify(locations));
+    } catch (e) {}
+  }
+
+  function persistPhotos() {
+    try {
+      localStorage.setItem(PHOTOS_KEY, JSON.stringify(photos));
+      return true;
+    } catch (e) {
+      return false; // likely storage quota exceeded — surfaced to the user by the caller
+    }
+  }
+
+  function persistShared() {
+    try {
+      localStorage.setItem(SHARED_KEY, JSON.stringify(sharedGroups));
+    } catch (e) {}
+  }
+
+  function persist() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+      saveError.classList.remove("show");
+    } catch (e) {
+      saveError.classList.add("show");
+    }
+  }
+
+  // ---- Feedback ----
+  function triggerFlash() {
+    readout.classList.add("flash");
+    setTimeout(() => readout.classList.remove("flash"), 380);
+  }
+
+  function beep() {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      const ctx = new Ctx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.13);
+    } catch (e) {}
+  }
+
+  // ---- Undo (single-level, tracks the last count-changing action) ----
+  function snapshotBefore(barcode) {
+    lastAction = { barcode, prevState: items[barcode] ? { ...items[barcode] } : null };
+    undoBtn.style.display = "flex";
+  }
+  function performUndo() {
+    if (!lastAction) return;
+    const { barcode, prevState } = lastAction;
+    if (prevState === null) {
+      delete items[barcode];
+    } else {
+      items[barcode] = prevState;
+    }
+    persist();
+    renderTotals();
+    renderTable();
+    lastAction = null;
+    undoBtn.style.display = "none";
+  }
+  undoBtn.addEventListener("click", performUndo);
+
+  function showReadout(name, count, delta, barcode) {
+    readoutIdle.style.display = "none";
+    readoutContent.style.display = "block";
+    readoutName.textContent = name;
+    readoutCount.textContent = String(count);
+    readoutDelta.textContent = delta > 0 ? `+${delta}` : delta < 0 ? String(delta) : "±0";
+    readoutDelta.style.color = delta > 0 ? "#C8863E" : delta < 0 ? "#C1573D" : "#A68F6C";
+    readoutBarcode.textContent = barcode;
+  }
+
+  // ---- Core scan handling ----
+  function applyScanToBarcode(code) {
+    const current = items[code];
+    const delta = mode === "add" ? 1 : -1;
+    const nextCount = Math.max(0, current.count + delta);
+    const actualDelta = nextCount - current.count;
+    snapshotBefore(code);
+    items[code] = { ...current, count: nextCount };
+    persist();
+    renderTotals();
+    renderTable();
+    showReadout(current.name, nextCount, actualDelta, code);
+    triggerFlash();
+    beep();
+    scanInput.focus();
+  }
+
+  function processScan(rawCode) {
+    const code = String(rawCode).trim();
+    if (!code) return;
+    if (pendingBarcode) return; // naming modal already open
+
+    if (sharedGroups[code] && sharedGroups[code].length >= 2) {
+      openDisambigModal(code);
+      return;
+    }
+
+    if (items[code]) {
+      applyScanToBarcode(code);
+    } else {
+      pendingBarcode = code;
+      modalBarcode.textContent = code;
+      newItemName.value = "";
+      newItemNotes.value = "";
+      newItemThreshold.value = "";
+      newItemBatch.value = "";
+      resetNewItemLocation();
+      modalConfirmLabel.textContent = mode === "add" ? "Add item (count 1)" : "Add item (count 0)";
+      modalOverlay.classList.add("open");
+      setTimeout(() => newItemName.focus(), 30);
+    }
+  }
+
+  scanForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const code = scanInput.value.trim();
+    scanInput.value = "";
+    processScan(code);
+  });
+
+  newItemForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!pendingBarcode) return;
+    const name = newItemName.value.trim() || "Unnamed item";
+    const notes = newItemNotes.value.trim();
+    const location = newItemLocationInput.value.trim();
+    const thresholdRaw = newItemThreshold.value.trim();
+    const threshold = thresholdRaw === "" ? "" : Math.max(0, Math.round(Number(thresholdRaw)));
+    const batch = newItemBatch.value.trim();
+    const startCount = mode === "add" ? 1 : 0;
+    snapshotBefore(pendingBarcode);
+    items[pendingBarcode] = { name, count: startCount, notes, location, threshold, batch };
+    rememberLocation(location);
+    persist();
+    renderTotals();
+    renderTable();
+    showReadout(name, startCount, startCount, pendingBarcode);
+    triggerFlash();
+    beep();
+    closeModal();
+  });
+
+  function closeModal() {
+    pendingBarcode = null;
+    modalOverlay.classList.remove("open");
+    scanInput.focus();
+  }
+  modalCancelBtn.addEventListener("click", closeModal);
+
+  // ---- Mode toggle ----
+  function setMode(next) {
+    mode = next;
+    modeAddBtn.classList.toggle("active-add", mode === "add");
+    modeRemoveBtn.classList.toggle("active-remove", mode === "remove");
+  }
+  modeAddBtn.addEventListener("click", () => setMode("add"));
+  modeRemoveBtn.addEventListener("click", () => setMode("remove"));
+
+  // ---- Table rendering ----
+  function renderTotals() {
+    const total = Object.values(items).reduce((s, v) => s + v.count, 0);
+    totalUnitsEl.textContent = String(total);
+  }
+
+  function iconBtn(svgPath, extraClass, title) {
+    return `<button class="icon-btn ${extraClass || ""}" title="${title}" data-action="${title}">${svgPath}</button>`;
+  }
+
+  function renderTable() {
+    const q = search.trim().toLowerCase();
+    const dirMul = sortDir === "asc" ? 1 : -1;
+    const rows = Object.entries(items)
+      .filter(([barcode, v]) => !q || v.name.toLowerCase().includes(q) || barcode.includes(q) || (v.location && v.location.toLowerCase().includes(q)))
+      .sort((a, b) => {
+        if (sortField === "count") return (a[1].count - b[1].count) * dirMul;
+        return a[1].name.localeCompare(b[1].name) * dirMul;
+      });
+
+    if (rows.length === 0) {
+      tableWrap.style.display = "none";
+      emptyState.style.display = "block";
+      emptyState.textContent = Object.keys(items).length === 0
+        ? "No items yet. Scan a barcode above to start the list."
+        : "No items match your search.";
+      return;
+    }
+    tableWrap.style.display = "block";
+    emptyState.style.display = "none";
+
+    tableBody.innerHTML = rows.map(([barcode, v]) => {
+      const isEditing = editingBarcode === barcode;
+      const threshold = v.threshold;
+      const hasThreshold = threshold !== undefined && threshold !== null && threshold !== "";
+      const isLow = hasThreshold && v.count <= Number(threshold);
+      const physicalBarcode = v.sharedBarcode || barcode;
+      const variantCount = (sharedGroups[physicalBarcode] || []).length;
+      const isSharedVariant = variantCount >= 2;
+      const displayBarcode = isSharedVariant ? physicalBarcode : barcode;
+      const nameCell = isEditing
+        ? `<input class="edit-input" value="${escapeHtml(v.name)}" data-edit-input="${barcode}" />`
+        : `<div class="item-name-cell">${v.location ? '<span class="loc-dot" title="Has location"></span>' : ""}${v.notes ? '<span class="note-dot" title="Has notes"></span>' : ""}${escapeHtml(v.name)}${isLow ? '<span class="low-stock-tag">LOW</span>' : ""}</div>`;
+      const metaLine = `<div class="item-card-meta">${escapeHtml(displayBarcode)}${isSharedVariant ? ' · <span class="loc-text">1 of ' + variantCount + ' variations</span>' : ""}${v.location ? ` · <span class="loc-text">${escapeHtml(v.location)}</span>` : ""}${hasThreshold ? ` · alert at ${escapeHtml(String(threshold))}` : ""}${v.batch ? ` · batch ${escapeHtml(v.batch)}` : ""}</div>`;
+      const hasPhoto = !!photos[barcode];
+      return `
+        <div class="item-card${isLow ? " low-stock" : ""}" data-name-cell="${barcode}">
+          <div class="item-card-top">
+            ${hasPhoto ? `<img class="photo-thumb" src="${photos[barcode]}" alt="" />` : ""}
+            <div style="min-width:0; flex:1;">
+              ${nameCell}
+              ${metaLine}
+            </div>
+            <div class="count-controls">
+              <button class="count-btn" data-act="minus" data-code="${barcode}" title="Subtract one">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12h14"/></svg>
+              </button>
+              <button class="count-num" data-act="adjust" data-code="${barcode}" title="Adjust by amount">${v.count}</button>
+              <button class="count-btn" data-act="plus" data-code="${barcode}" title="Add one">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="item-card-actions">
+            <button class="icon-btn${hasPhoto ? " has-note" : ""}" data-act="photo" data-code="${barcode}" title="Photo">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            </button>
+            <button class="icon-btn${v.location ? " has-note" : ""}" data-act="location" data-code="${barcode}" title="Location">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+            </button>
+            <button class="icon-btn${v.notes ? " has-note" : ""}" data-act="notes" data-code="${barcode}" title="Notes">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </button>
+            <button class="icon-btn${hasThreshold ? " has-note" : ""}" data-act="threshold" data-code="${barcode}" title="Low stock alert">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            </button>
+            <button class="icon-btn${v.batch ? " has-note" : ""}" data-act="batch" data-code="${barcode}" title="Batch / lot number">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M3 12h18"/></svg>
+            </button>
+            <button class="icon-btn${isSharedVariant ? " has-note" : ""}" data-act="split" data-code="${barcode}" title="Variations on this barcode">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3v12a3 3 0 0 0 3 3h9"/><path d="m15 6 3-3 3 3M6 15a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/></svg>
+            </button>
+            ${isEditing
+              ? `<button class="icon-btn" data-act="save" data-code="${barcode}" title="Save name">
+                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+                 </button>`
+              : `<button class="icon-btn" data-act="edit" data-code="${barcode}" title="Rename">
+                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                 </button>`}
+            <button class="icon-btn danger" data-act="delete" data-code="${barcode}" title="Delete item">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>
+            </button>
+          </div>
+        </div>`;
+    }).join("");
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  tableBody.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-act]");
+    if (!btn) return;
+    const code = btn.dataset.code;
+    const act = btn.dataset.act;
+    if (act === "minus") adjustCount(code, -1);
+    if (act === "plus") adjustCount(code, 1);
+    if (act === "edit") { editingBarcode = code; renderTable(); focusEditInput(code); }
+    if (act === "save") saveEdit(code);
+    if (act === "delete") deleteItem(code);
+    if (act === "notes") openNotesModal(code);
+    if (act === "location") openLocationModal(code);
+    if (act === "photo") openPhotoModal(code);
+    if (act === "threshold") openThresholdModal(code);
+    if (act === "batch") openBatchModal(code);
+    if (act === "split") openSplitModal(code);
+    if (act === "adjust") openAdjustModal(code);
+  });
+
+  function resetNewItemLocation() {
+    newItemLocationInput.value = "";
+    renderLocationChips(newItemLocationChips, newItemLocationInput);
+  }
+
+  // ---- Remembered-locations chip list (plain buttons, no native pickers) ----
+  function rememberLocation(val) {
+    if (!val) return;
+    if (!locations.includes(val)) {
+      locations.push(val);
+      locations.sort((a, b) => a.localeCompare(b));
+      persistLocations();
+    }
+  }
+
+  function forgetLocation(val) {
+    locations = locations.filter((l) => l !== val);
+    persistLocations();
+  }
+
+  function renderLocationChips(containerEl, inputEl) {
+    if (locations.length === 0) {
+      containerEl.innerHTML = "";
+      return;
+    }
+    containerEl.innerHTML = locations.map((loc) => `
+      <span class="location-chip">
+        <button type="button" class="location-chip-select" data-val="${escapeHtml(loc)}">${escapeHtml(loc)}</button>
+        <button type="button" class="location-chip-remove" data-val="${escapeHtml(loc)}" title="Remove from list">×</button>
+      </span>
+    `).join("");
+    containerEl.querySelectorAll(".location-chip-select").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        inputEl.value = btn.dataset.val;
+        inputEl.focus();
+      });
+    });
+    containerEl.querySelectorAll(".location-chip-remove").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        forgetLocation(btn.dataset.val);
+        renderLocationChips(newItemLocationChips, newItemLocationInput);
+        renderLocationChips(locationChips, locationInput);
+      });
+    });
+  }
+
+  function openLocationModal(barcode) {
+    locationEditingBarcode = barcode;
+    locationModalTitle.textContent = `${items[barcode].name} — ${barcode}`;
+    locationInput.value = items[barcode].location || "";
+    renderLocationChips(locationChips, locationInput);
+    locationModalOverlay.classList.add("open");
+    setTimeout(() => locationInput.focus(), 30);
+  }
+
+  locationSaveBtn.addEventListener("click", () => {
+    if (!locationEditingBarcode || !items[locationEditingBarcode]) return;
+    const val = locationInput.value.trim();
+    items[locationEditingBarcode] = { ...items[locationEditingBarcode], location: val };
+    rememberLocation(val);
+    persist();
+    renderTable();
+    locationModalOverlay.classList.remove("open");
+    scanInput.focus();
+    locationEditingBarcode = null;
+  });
+
+
+  locationCancelBtn.addEventListener("click", () => {
+    locationModalOverlay.classList.remove("open");
+    scanInput.focus();
+    locationEditingBarcode = null;
+  });
+
+  // ---- Photo (stored separately from items, keyed by barcode — survives inventory replace/import) ----
+  function openPhotoModal(barcode) {
+    photoEditingBarcode = barcode;
+    pendingPhotoDataUrl = undefined;
+    photoModalTitle.textContent = `${items[barcode].name} — ${barcode}`;
+    const existing = photos[barcode];
+    if (existing) {
+      photoPreviewImg.src = existing;
+      photoPreviewImg.style.display = "block";
+      photoEmptyText.style.display = "none";
+      photoRemoveBtn.style.display = "block";
+    } else {
+      photoPreviewImg.style.display = "none";
+      photoEmptyText.style.display = "block";
+      photoRemoveBtn.style.display = "none";
+    }
+    photoFileInput.value = "";
+    photoModalOverlay.classList.add("open");
+  }
+
+  function compressImage(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("Couldn't read file"));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("Couldn't read image"));
+        img.onload = () => {
+          const maxDim = 480;
+          let { width, height } = img;
+          if (width > height && width > maxDim) {
+            height = Math.round(height * (maxDim / width));
+            width = maxDim;
+          } else if (height > maxDim) {
+            width = Math.round(width * (maxDim / height));
+            height = maxDim;
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", 0.65));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  photoTakeBtn.addEventListener("click", () => photoFileInput.click());
+
+  photoFileInput.addEventListener("change", async () => {
+    const file = photoFileInput.files[0];
+    if (!file) return;
+    try {
+      const dataUrl = await compressImage(file);
+      pendingPhotoDataUrl = dataUrl;
+      photoPreviewImg.src = dataUrl;
+      photoPreviewImg.style.display = "block";
+      photoEmptyText.style.display = "none";
+      photoRemoveBtn.style.display = "block";
+    } catch (e) {
+      alert("Couldn't process that photo — try a different one.");
+    }
+  });
+
+  photoRemoveBtn.addEventListener("click", () => {
+    pendingPhotoDataUrl = null;
+    photoPreviewImg.style.display = "none";
+    photoEmptyText.style.display = "block";
+    photoRemoveBtn.style.display = "none";
+  });
+
+  photoSaveBtn.addEventListener("click", () => {
+    if (!photoEditingBarcode) return;
+    if (pendingPhotoDataUrl === null) {
+      delete photos[photoEditingBarcode];
+    } else if (pendingPhotoDataUrl !== undefined) {
+      photos[photoEditingBarcode] = pendingPhotoDataUrl;
+    }
+    const ok = persistPhotos();
+    if (!ok) {
+      alert("Couldn't save that photo — your device may be low on storage space for this app.");
+      return;
+    }
+    renderTable();
+    photoModalOverlay.classList.remove("open");
+    scanInput.focus();
+    photoEditingBarcode = null;
+  });
+
+  photoCancelBtn.addEventListener("click", () => {
+    photoModalOverlay.classList.remove("open");
+    scanInput.focus();
+    photoEditingBarcode = null;
+  });
+
+  // ---- Threshold modal ----
+  function openThresholdModal(barcode) {
+    thresholdEditingBarcode = barcode;
+    thresholdModalTitle.textContent = `${items[barcode].name} — ${barcode}`;
+    const t = items[barcode].threshold;
+    thresholdInput.value = t === undefined || t === null ? "" : String(t);
+    thresholdModalOverlay.classList.add("open");
+    setTimeout(() => thresholdInput.focus(), 30);
+  }
+
+  thresholdForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!thresholdEditingBarcode || !items[thresholdEditingBarcode]) return;
+    const raw = thresholdInput.value.trim();
+    const threshold = raw === "" ? "" : Math.max(0, Math.round(Number(raw)));
+    items[thresholdEditingBarcode] = { ...items[thresholdEditingBarcode], threshold };
+    persist();
+    renderTable();
+    thresholdModalOverlay.classList.remove("open");
+    scanInput.focus();
+    thresholdEditingBarcode = null;
+  });
+
+  thresholdCancelBtn.addEventListener("click", () => {
+    thresholdModalOverlay.classList.remove("open");
+    scanInput.focus();
+    thresholdEditingBarcode = null;
+  });
+
+  // ---- Batch/lot modal ----
+  function openBatchModal(barcode) {
+    batchEditingBarcode = barcode;
+    batchModalTitle.textContent = `${items[barcode].name} — ${barcode}`;
+    batchInput.value = items[barcode].batch || "";
+    batchModalOverlay.classList.add("open");
+    setTimeout(() => batchInput.focus(), 30);
+  }
+
+  batchForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!batchEditingBarcode || !items[batchEditingBarcode]) return;
+    const batch = batchInput.value.trim();
+    items[batchEditingBarcode] = { ...items[batchEditingBarcode], batch };
+    persist();
+    renderTable();
+    batchModalOverlay.classList.remove("open");
+    if (splitModalOverlay.classList.contains("open")) {
+      renderVariantList();
+    } else {
+      scanInput.focus();
+    }
+    batchEditingBarcode = null;
+  });
+
+  batchCancelBtn.addEventListener("click", () => {
+    batchModalOverlay.classList.remove("open");
+    scanInput.focus();
+    batchEditingBarcode = null;
+  });
+
+  // ---- Split barcode / manage variations (same product, different batch numbers) ----
+  function renderVariantList() {
+    const variantBarcodes = sharedGroups[splitPhysicalBarcode] || [];
+    variantList.innerHTML = variantBarcodes.map((vb) => {
+      const item = items[vb];
+      if (!item) return "";
+      const canRemove = variantBarcodes.length > 1;
+      const label = item.batch ? item.batch : "No batch number set";
+      return `
+        <div class="variant-row">
+          <div class="variant-row-info">
+            <div class="variant-row-name">${escapeHtml(label)}</div>
+            <div class="variant-row-count">${item.count} on hand</div>
+          </div>
+          <button type="button" class="icon-btn" data-act="batch" data-code="${vb}" title="Set batch number" style="flex:0 0 32px;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M3 12h18"/></svg>
+          </button>
+          ${canRemove ? `<button type="button" class="variant-remove-btn" data-remove-variant="${vb}" title="Remove this batch">×</button>` : ""}
+        </div>
+      `;
+    }).join("");
+  }
+
+  function openSplitModal(barcode) {
+    const item = items[barcode];
+    if (!item) return;
+    const physical = item.sharedBarcode || barcode;
+    splitPhysicalBarcode = physical;
+    if (!sharedGroups[physical]) {
+      // First time splitting this barcode — the current item becomes batch #1, staying at its own barcode.
+      sharedGroups[physical] = [barcode];
+      items[barcode] = { ...item, sharedBarcode: physical };
+      persistShared();
+      persist();
+    }
+    splitModalTitle.textContent = `${item.name} — ${physical}`;
+    newVariantInput.value = "";
+    renderVariantList();
+    splitModalOverlay.classList.add("open");
+  }
+
+  addVariantBtn.addEventListener("click", () => {
+    const batchVal = newVariantInput.value.trim();
+    if (!batchVal || !splitPhysicalBarcode) return;
+    const existingBarcodes = sharedGroups[splitPhysicalBarcode] || [];
+    const titleSource = items[splitPhysicalBarcode] || items[existingBarcodes[0]];
+    const title = titleSource ? titleSource.name : "Unnamed item";
+    const variantBarcode = `${splitPhysicalBarcode}::${Date.now()}`;
+    items[variantBarcode] = { name: title, count: 0, notes: "", location: "", threshold: "", batch: batchVal, sharedBarcode: splitPhysicalBarcode };
+    sharedGroups[splitPhysicalBarcode] = [...existingBarcodes, variantBarcode];
+    persistShared();
+    persist();
+    renderTotals();
+    renderTable();
+    newVariantInput.value = "";
+    renderVariantList();
+  });
+
+  newVariantInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addVariantBtn.click();
+    }
+  });
+
+  variantList.addEventListener("click", (e) => {
+    const batchBtn = e.target.closest('button[data-act="batch"]');
+    if (batchBtn) {
+      openBatchModal(batchBtn.dataset.code);
+      return;
+    }
+    const btn = e.target.closest("button[data-remove-variant]");
+    if (!btn || !splitPhysicalBarcode) return;
+    const vb = btn.dataset.removeVariant;
+    const list = sharedGroups[splitPhysicalBarcode] || [];
+    if (list.length <= 1) return; // always keep at least one variation
+    sharedGroups[splitPhysicalBarcode] = list.filter((b) => b !== vb);
+    delete items[vb];
+    persistShared();
+    persist();
+    renderTotals();
+    renderTable();
+    renderVariantList();
+  });
+
+  splitCloseBtn.addEventListener("click", () => {
+    splitModalOverlay.classList.remove("open");
+    scanInput.focus();
+    splitPhysicalBarcode = null;
+  });
+
+  // ---- Which variation? (shown when a shared barcode with 2+ variations is scanned) ----
+  function openDisambigModal(physicalBarcode) {
+    disambigPhysicalBarcode = physicalBarcode;
+    const variantBarcodes = sharedGroups[physicalBarcode] || [];
+    const first = items[variantBarcodes[0]];
+    disambigModalTitle.textContent = first ? `${first.name} — ${physicalBarcode}` : physicalBarcode;
+    disambigList.innerHTML = variantBarcodes.map((vb) => {
+      const item = items[vb];
+      if (!item) return "";
+      const label = item.batch ? item.batch : "No batch number set";
+      return `
+        <button type="button" class="variant-pick-btn" data-variant-code="${vb}">
+          <span class="variant-pick-name">${escapeHtml(label)}</span>
+          <span class="variant-pick-count">${item.count}</span>
+        </button>
+      `;
+    }).join("");
+    disambigModalOverlay.classList.add("open");
+  }
+
+  disambigList.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-variant-code]");
+    if (!btn) return;
+    const variantBarcode = btn.dataset.variantCode;
+    disambigModalOverlay.classList.remove("open");
+    disambigPhysicalBarcode = null;
+    applyScanToBarcode(variantBarcode);
+  });
+
+  disambigCancelBtn.addEventListener("click", () => {
+    disambigModalOverlay.classList.remove("open");
+    scanInput.focus();
+    disambigPhysicalBarcode = null;
+  });
+
+  // ---- Adjust quantity modal (bulk add/subtract) ----
+  function openAdjustModal(barcode) {
+    adjustEditingBarcode = barcode;
+    adjustModalTitle.textContent = `${items[barcode].name} — currently ${items[barcode].count}`;
+    adjustAmountInput.value = "";
+    adjustModalOverlay.classList.add("open");
+    setTimeout(() => adjustAmountInput.focus(), 30);
+  }
+
+  function applyAdjust(sign) {
+    if (!adjustEditingBarcode || !items[adjustEditingBarcode]) return;
+    const raw = Number(adjustAmountInput.value);
+    if (!raw || raw <= 0) return;
+    const current = items[adjustEditingBarcode];
+    const nextCount = Math.max(0, current.count + sign * Math.round(raw));
+    const actualDelta = nextCount - current.count;
+    snapshotBefore(adjustEditingBarcode);
+    items[adjustEditingBarcode] = { ...current, count: nextCount };
+    persist();
+    renderTotals();
+    renderTable();
+    showReadout(current.name, nextCount, actualDelta, adjustEditingBarcode);
+    triggerFlash();
+    beep();
+    adjustModalOverlay.classList.remove("open");
+    scanInput.focus();
+    adjustEditingBarcode = null;
+  }
+
+  adjustForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    applyAdjust(1);
+  });
+  adjustSubtractBtn.addEventListener("click", () => applyAdjust(-1));
+  adjustCancelBtn.addEventListener("click", () => {
+    adjustModalOverlay.classList.remove("open");
+    scanInput.focus();
+    adjustEditingBarcode = null;
+  });
+
+  // ---- Location totals ----
+  function openLocationTotals() {
+    const totals = {};
+    Object.values(items).forEach((v) => {
+      const key = v.location && v.location.trim() ? v.location.trim() : "Unassigned";
+      totals[key] = (totals[key] || 0) + v.count;
+    });
+    const entries = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+    if (entries.length === 0) {
+      locationTotalsList.innerHTML = `<div class="location-totals-row"><span class="location-totals-name">No items yet</span></div>`;
+    } else {
+      locationTotalsList.innerHTML = entries.map(([loc, count]) => `
+        <div class="location-totals-row">
+          <span class="location-totals-name">${escapeHtml(loc)}</span>
+          <span class="location-totals-count">${count}</span>
+        </div>
+      `).join("");
+    }
+    locationTotalsModalOverlay.classList.add("open");
+  }
+  locationsSummaryBtn.addEventListener("click", openLocationTotals);
+  locationTotalsCloseBtn.addEventListener("click", () => {
+    locationTotalsModalOverlay.classList.remove("open");
+    scanInput.focus();
+  });
+
+  function openNotesModal(barcode) {
+    notesEditingBarcode = barcode;
+    notesModalTitle.textContent = `${items[barcode].name} — ${barcode}`;
+    notesTextarea.value = items[barcode].notes || "";
+    notesModalOverlay.classList.add("open");
+    setTimeout(() => notesTextarea.focus(), 30);
+  }
+
+  notesForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!notesEditingBarcode || !items[notesEditingBarcode]) return;
+    items[notesEditingBarcode] = { ...items[notesEditingBarcode], notes: notesTextarea.value.trim() };
+    persist();
+    renderTable();
+    notesModalOverlay.classList.remove("open");
+    scanInput.focus();
+    notesEditingBarcode = null;
+  });
+
+  notesCancelBtn.addEventListener("click", () => {
+    notesModalOverlay.classList.remove("open");
+    scanInput.focus();
+    notesEditingBarcode = null;
+  });
+
+  function focusEditInput(code) {
+    const input = tableBody.querySelector(`[data-edit-input="${cssEscape(code)}"]`);
+    if (input) {
+      input.focus();
+      input.select();
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") saveEdit(code);
+      });
+    }
+  }
+
+  function cssEscape(str) {
+    return String(str).replace(/["\\]/g, "\\$&");
+  }
+
+  function saveEdit(code) {
+    const input = tableBody.querySelector(`[data-edit-input="${cssEscape(code)}"]`);
+    const name = (input ? input.value.trim() : "") || items[code].name;
+    items[code] = { ...items[code], name };
+    persist();
+    editingBarcode = null;
+    renderTable();
+  }
+
+  function deleteItem(code) {
+    delete items[code];
+    for (const physical of Object.keys(sharedGroups)) {
+      if (sharedGroups[physical].includes(code)) {
+        sharedGroups[physical] = sharedGroups[physical].filter((b) => b !== code);
+        if (sharedGroups[physical].length === 0) delete sharedGroups[physical];
+      }
+    }
+    persistShared();
+    persist();
+    renderTotals();
+    renderTable();
+  }
+
+  function adjustCount(code, delta) {
+    const current = items[code];
+    const nextCount = Math.max(0, current.count + delta);
+    snapshotBefore(code);
+    items[code] = { ...current, count: nextCount };
+    persist();
+    renderTotals();
+    renderTable();
+  }
+
+  searchInput.addEventListener("input", (e) => {
+    search = e.target.value;
+    renderTable();
+  });
+
+  function setSortField(field) {
+    sortField = field;
+    sortNameBtn.classList.toggle("active-sort", field === "name");
+    sortCountBtn.classList.toggle("active-sort", field === "count");
+    renderTable();
+  }
+  sortNameBtn.addEventListener("click", () => setSortField("name"));
+  sortCountBtn.addEventListener("click", () => setSortField("count"));
+  sortDirBtn.addEventListener("click", () => {
+    sortDir = sortDir === "asc" ? "desc" : "asc";
+    sortDirBtn.classList.toggle("desc", sortDir === "desc");
+    sortDirBtn.title = sortDir === "asc" ? "Reverse order" : "Currently: high to low / Z to A";
+    renderTable();
+  });
+
+  // ---- Reset ----
+  resetLinkBtn.addEventListener("click", () => {
+    resetLinkBtn.style.display = "none";
+    resetConfirm.style.display = "flex";
+  });
+  resetNoBtn.addEventListener("click", () => {
+    resetConfirm.style.display = "none";
+    resetLinkBtn.style.display = "inline";
+  });
+  resetYesBtn.addEventListener("click", () => {
+    items = {};
+    locations = [];
+    photos = {};
+    sharedGroups = {};
+    persist();
+    persistLocations();
+    persistPhotos();
+    persistShared();
+    renderTotals();
+    renderTable();
+    readoutIdle.style.display = "flex";
+    readoutContent.style.display = "none";
+    resetConfirm.style.display = "none";
+    resetLinkBtn.style.display = "inline";
+  });
+
+  // ---- Export ----
+  exportBtn.addEventListener("click", () => {
+    if (typeof XLSX === "undefined") {
+      alert("Export library failed to load — check your internet connection and try again.");
+      return;
+    }
+    const rows = Object.entries(items)
+      .sort((a, b) => a[1].name.localeCompare(b[1].name))
+      .map(([barcode, v]) => ({
+        Barcode: v.sharedBarcode || barcode,
+        Item: v.name,
+        Count: v.count,
+        Location: v.location || "",
+        "Low Stock Alert": v.threshold === undefined || v.threshold === null ? "" : v.threshold,
+        "Batch/Lot": v.batch || "",
+        Variation: v.sharedBarcode ? v.name : "",
+        Notes: v.notes || "",
+      }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = [{ wch: 18 }, { wch: 32 }, { wch: 10 }, { wch: 18 }, { wch: 14 }, { wch: 16 }, { wch: 20 }, { wch: 36 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Inventory");
+    const stamp = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `inventory-${stamp}.xlsx`);
+  });
+
+  // ---- Import ----
+  const importBtn = el("importBtn");
+  const importInput = el("importInput");
+  const importModalOverlay = el("importModalOverlay");
+  const importSummaryText = el("importSummaryText");
+  const importMergeBtn = el("importMergeBtn");
+  const importReplaceBtn = el("importReplaceBtn");
+  const importCancelBtn = el("importCancelBtn");
+
+  let pendingImportRows = null;
+
+  const BARCODE_KEYS = ["barcode", "upc", "sku", "code", "ean"];
+  const NAME_KEYS = ["item", "name", "item name", "description", "product"];
+  const COUNT_KEYS = ["count", "qty", "quantity", "stock", "units"];
+  const NOTES_KEYS = ["notes", "note", "comment", "comments", "remarks"];
+  const LOCATION_KEYS = ["location", "loc", "shelf", "bin", "warehouse"];
+  const THRESHOLD_KEYS = ["low stock alert", "threshold", "reorder", "reorder point", "alert", "low stock"];
+  const BATCH_KEYS = ["batch/lot", "batch", "lot", "lot number", "batch number", "batch/lot number"];
+
+  function normalizeImportRow(row) {
+    let barcode, name, count, notes, location, threshold, batch;
+    for (const k of Object.keys(row)) {
+      const lk = k.trim().toLowerCase();
+      if (barcode === undefined && BARCODE_KEYS.includes(lk)) barcode = row[k];
+      else if (name === undefined && NAME_KEYS.includes(lk)) name = row[k];
+      else if (count === undefined && COUNT_KEYS.includes(lk)) count = row[k];
+      else if (notes === undefined && NOTES_KEYS.includes(lk)) notes = row[k];
+      else if (location === undefined && LOCATION_KEYS.includes(lk)) location = row[k];
+      else if (threshold === undefined && THRESHOLD_KEYS.includes(lk)) threshold = row[k];
+      else if (batch === undefined && BATCH_KEYS.includes(lk)) batch = row[k];
+    }
+    const cleanBarcode = barcode != null ? String(barcode).trim() : "";
+    const cleanName = name != null ? String(name).trim() : "";
+    const cleanNotes = notes != null ? String(notes).trim() : "";
+    const cleanLocation = location != null ? String(location).trim() : "";
+    const cleanBatch = batch != null ? String(batch).trim() : "";
+    const numCount = Number(count);
+    const cleanCount = count != null && !isNaN(numCount) ? Math.max(0, Math.round(numCount)) : 0;
+    const numThreshold = Number(threshold);
+    const cleanThreshold = threshold != null && threshold !== "" && !isNaN(numThreshold) ? Math.max(0, Math.round(numThreshold)) : "";
+    return { barcode: cleanBarcode, name: cleanName, count: cleanCount, notes: cleanNotes, location: cleanLocation, threshold: cleanThreshold, batch: cleanBatch };
+  }
+
+  importBtn.addEventListener("click", () => importInput.click());
+
+  importInput.addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    importInput.value = ""; // reset so selecting the same file again still fires 'change'
+    if (!file) return;
+    if (typeof XLSX === "undefined") {
+      alert("Import library failed to load — check your internet connection and try again.");
+      return;
+    }
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const firstSheetName = wb.SheetNames[0];
+      const sheet = wb.Sheets[firstSheetName];
+      const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+      const parsed = rawRows.map(normalizeImportRow).filter((r) => r.barcode);
+      const skipped = rawRows.length - parsed.length;
+
+      if (parsed.length === 0) {
+        alert("Couldn't find any rows with a barcode column. Expected column headers like \"Barcode\", \"Item\", and \"Count\".");
+        return;
+      }
+
+      pendingImportRows = parsed;
+      importSummaryText.textContent = `Found ${parsed.length} item${parsed.length === 1 ? "" : "s"} in "${file.name}"` +
+        (skipped > 0 ? ` (${skipped} row${skipped === 1 ? "" : "s"} skipped — no barcode found).` : ".");
+      importModalOverlay.classList.add("open");
+    } catch (err) {
+      alert("Couldn't read that file. Make sure it's a .xlsx, .xls, or .csv file exported the same way as this app's export.");
+    }
+  });
+
+  function applyImport(mode) {
+    if (!pendingImportRows) return;
+    if (mode === "replace") items = {};
+    for (const row of pendingImportRows) {
+      const existing = items[row.barcode];
+      items[row.barcode] = {
+        name: row.name || (existing ? existing.name : "Unnamed item"),
+        count: row.count,
+        notes: row.notes || (existing ? existing.notes || "" : ""),
+        location: row.location || (existing ? existing.location || "" : ""),
+        threshold: row.threshold !== "" ? row.threshold : (existing ? existing.threshold || "" : ""),
+        batch: row.batch || (existing ? existing.batch || "" : ""),
+      };
+      if (row.location && !locations.includes(row.location)) {
+        locations.push(row.location);
+      }
+    }
+    locations.sort((a, b) => a.localeCompare(b));
+    persistLocations();
+    persist();
+    renderTotals();
+    renderTable();
+    pendingImportRows = null;
+    importModalOverlay.classList.remove("open");
+    scanInput.focus();
+  }
+
+  importMergeBtn.addEventListener("click", () => applyImport("merge"));
+  importReplaceBtn.addEventListener("click", () => applyImport("replace"));
+  importCancelBtn.addEventListener("click", () => {
+    pendingImportRows = null;
+    importModalOverlay.classList.remove("open");
+    scanInput.focus();
+  });
+
+  // ---- Camera scanning ----
+  // Uses the native BarcodeDetector API where available (fast, Chrome/Android),
+  // and falls back to the ZXing JS library everywhere else (notably Safari/iOS,
+  // which does not implement BarcodeDetector at all).
+  let cameraOpen = false;
+  let lastScan = { code: null, time: 0 };
+
+  // Native path
+  let nativeStream = null;
+  let nativeDetector = null;
+  let rafId = null;
+
+  // ZXing fallback path
+  let zxingReader = null;
+  let zxingControls = null;
+
+  function handleDetectedCode(value) {
+    if (!value || pendingBarcode) return;
+    const now = Date.now();
+    if (!(lastScan.code === value && now - lastScan.time < SCAN_COOLDOWN_MS)) {
+      lastScan = { code: value, time: now };
+      processScan(value);
+    }
+  }
+
+  function setCameraUiOpen(isOpen) {
+    cameraOpen = isOpen;
+    cameraPanel.classList.toggle("open", isOpen);
+    cameraToggleBtn.classList.toggle("active", isOpen);
+    cameraToggleLabel.textContent = isOpen ? "Stop camera" : "Scan with camera";
+  }
+
+  function stopCamera() {
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = null;
+    if (nativeStream) {
+      nativeStream.getTracks().forEach((t) => t.stop());
+      nativeStream = null;
+    }
+    if (zxingControls) {
+      try { zxingControls.stop(); } catch (e) {}
+      zxingControls = null;
+    }
+    setCameraUiOpen(false);
+  }
+
+  function nativeDetectLoop() {
+    if (!cameraOpen || !nativeDetector || cameraVideo.readyState < 2) {
+      rafId = requestAnimationFrame(nativeDetectLoop);
+      return;
+    }
+    nativeDetector.detect(cameraVideo)
+      .then((codes) => {
+        if (codes && codes.length > 0) handleDetectedCode(codes[0].rawValue);
+      })
+      .catch(() => {})
+      .finally(() => {
+        rafId = requestAnimationFrame(nativeDetectLoop);
+      });
+  }
+
+  async function startCameraNative() {
+    nativeDetector = new window.BarcodeDetector({ formats: BARCODE_FORMATS });
+    try {
+      nativeStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } } });
+    } catch (e) {
+      nativeStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    }
+    cameraVideo.srcObject = nativeStream;
+    await cameraVideo.play().catch(() => {});
+    setCameraUiOpen(true);
+    rafId = requestAnimationFrame(nativeDetectLoop);
+  }
+
+  async function startCameraZXing() {
+    if (typeof ZXingBrowser === "undefined") {
+      cameraError.textContent = "The camera scanning library failed to load — check your internet connection and try again.";
+      return;
+    }
+    if (!zxingReader) zxingReader = new ZXingBrowser.BrowserMultiFormatReader();
+    try {
+      zxingControls = await zxingReader.decodeFromConstraints(
+        { video: { facingMode: "environment" } },
+        cameraVideo,
+        (result) => {
+          if (result) handleDetectedCode(result.getText());
+        }
+      );
+      setCameraUiOpen(true);
+    } catch (e) {
+      cameraError.textContent = "Camera access was denied or unavailable. Check your browser/site camera permission.";
+    }
+  }
+
+  async function startCamera() {
+    cameraError.textContent = "";
+    try {
+      if ("BarcodeDetector" in window) {
+        await startCameraNative();
+      } else {
+        await startCameraZXing();
+      }
+    } catch (e) {
+      cameraError.textContent = "Camera access was denied or unavailable. Check your browser/site camera permission.";
+    }
+  }
+
+  cameraToggleBtn.addEventListener("click", () => {
+    if (cameraOpen) stopCamera();
+    else startCamera();
+  });
+
+  window.addEventListener("beforeunload", stopCamera);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden && cameraOpen) stopCamera();
+  });
+
+  // ---- PWA install prompt (only present in the multi-file/manifest version) ----
+  if (installBanner && installBtn) {
+    let deferredPrompt = null;
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      installBanner.classList.add("show");
+    });
+    installBtn.addEventListener("click", async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      installBanner.classList.remove("show");
+    });
+    window.addEventListener("appinstalled", () => {
+      installBanner.classList.remove("show");
+    });
+  }
+
+  // ---- Service worker ----
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    });
+  }
+
+  // ---- Init ----
+  load();
+  setMode("add");
+  resetNewItemLocation();
+  renderTotals();
+  renderTable();
+  scanInput.focus();
+})();
+
+</script>
+</body>
+</html>
