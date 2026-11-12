@@ -1,0 +1,2248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Bottles</title>
+<meta name="theme-color" content="#E8E0D0" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Bottles" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/@zxing/browser@0.2.1/umd/zxing-browser.min.js"></script>
+<style>
+:root {
+  /* High desert: caliche sand, basalt, juniper, sage, red rock, turquoise */
+  --bg: #E8E0D0; --surface: #F4EFE5; --surface-2: #ECE4D5; --sheet-bg: #F4EFE5; --input-bg: #FBF8F2;
+  --ink: #2A2621; --muted: #6F6556; --line: #D6CAB4; --line-strong: #BFAF93;
+  --accent: #A4472B; --on-accent: #FFF8F0; --accent-text: #93391F; --focus: #2F8A87;
+  --chip-on: #3F5641; --on-chip-on: #F4EFE5;
+  --tag-bg: #DDE3D2; --tag-ink: #3A4E3B; --tag-finish-bg: #CFE6E2; --tag-finish-ink: #1D5F5C; --tag-barrel-bg: #EBD6B3; --tag-barrel-ink: #6A4718;
+  --danger: #A8321F; --ok: #3E7D4F; --warn: #B8641A; --count-ink: #A4472B;
+  --toast-bg: #2A2621; --toast-ink: #F4EFE5; --toast-btn: rgba(255,255,255,.14);
+  --banner-bg: #F1DDB8; --banner-ink: #5C3D12; --banner-line: #E0C38E;
+  --r: 12px; --r-lg: 16px; --r-chip: 999px; --r-tag: 999px; --r-sheet: 22px;
+  --font: "Figtree", system-ui, sans-serif; --font-display: "Young Serif", Georgia, serif; --font-num: "Figtree", system-ui, sans-serif;
+  --name-size: 19px; --name-weight: 400; --title-weight: 400; --toast-bottom: 96px;
+  --wall: #8A6A45; --turq: #26716E; --basalt: #2A2621;
+  color-scheme: light;
+}
+/* ===== Shared component styles (each version sets the variables) ===== */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+html.locked, html.locked body { overflow: hidden; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 16px; line-height: 1.45; -webkit-tap-highlight-color: transparent; }
+button, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .45; }
+:focus-visible { outline: 3px solid var(--focus, var(--accent)); outline-offset: 2px; }
+.muted { color: var(--muted); }
+.lead { margin: 0 0 14px; font-size: 16px; }
+.field-hint { font-size: 13px; color: var(--muted); margin: 8px 0 6px; }
+h3.sec { font-family: var(--font-sec, var(--font)); font-size: 14px; font-weight: 700; color: var(--muted); margin: 20px 0 8px; letter-spacing: .01em; }
+
+/* Buttons */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; padding: 0 18px; border-radius: var(--r); border: 1.5px solid var(--line-strong, var(--line)); background: var(--surface-2); color: var(--ink); font-weight: 650; font-size: 15px; text-decoration: none; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.ghost { background: transparent; }
+.btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn.small { min-height: 38px; padding: 0 12px; font-size: 14px; }
+.btn.wide { width: 100%; margin-top: 14px; }
+.link { background: none; border: 0; padding: 8px 6px; color: var(--accent-text, var(--accent)); font-weight: 600; font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
+.link.danger { color: var(--danger); }
+.icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: var(--r); border: 1.5px solid var(--line); background: var(--surface-2); padding: 0; }
+.round { width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--line-strong, var(--line)); background: var(--surface-2); font-size: 20px; font-weight: 600; line-height: 1; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.actions { display: flex; gap: 10px; margin-top: 18px; }
+.actions > .btn { flex: 1; }
+.actions.col { flex-direction: column; }
+.actions.sticky { position: sticky; bottom: -18px; background: var(--sheet-bg, var(--surface)); padding: 12px 0 calc(22px + env(safe-area-inset-bottom)); margin-top: 18px; margin-bottom: -18px; z-index: 2; box-shadow: 0 -12px 12px -12px var(--sheet-bg, var(--surface)); }
+.actions.sticky .btn.wide { margin-top: 0; }
+
+/* Chips */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips.col { flex-direction: column; }
+.chip { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: var(--r-chip, 999px); border: 1.5px solid var(--line); background: var(--surface-2); font-size: 14.5px; font-weight: 600; }
+.chip small { font-weight: 700; opacity: .7; }
+.chip.on { background: var(--chip-on); border-color: var(--chip-on); color: var(--on-chip-on); }
+.chip.soft { min-height: 34px; font-weight: 500; }
+.chip.place { justify-content: space-between; width: 100%; min-height: 48px; border-radius: var(--r); }
+.chip.removable { padding-right: 4px; }
+.chip.removable button { border: 0; background: none; width: 30px; height: 30px; font-size: 18px; color: var(--muted); }
+.chips.sugg:empty { display: none; }
+.chips.sugg { margin: -6px 0 12px; }
+
+/* Tags */
+.tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.tag { font-size: 12.5px; font-weight: 650; padding: 3px 9px; border-radius: var(--r-tag, 6px); background: var(--tag-bg); color: var(--tag-ink); line-height: 1.35; }
+.tag.t-finish { background: var(--tag-finish-bg, var(--tag-bg)); color: var(--tag-finish-ink, var(--tag-ink)); }
+.tag.t-finish.none { opacity: .7; font-weight: 500; }
+.tag.t-barrel { background: var(--tag-barrel-bg, var(--tag-bg)); color: var(--tag-barrel-ink, var(--tag-ink)); }
+.tag.t-proof { background: transparent; color: var(--muted); padding-left: 2px; padding-right: 2px; }
+.pl-loc { font-weight: 700; }
+.pl-spot { color: var(--muted); }
+.pl-spot::before { content: " › "; }
+
+/* Bottle card */
+.card-list { display: flex; flex-direction: column; gap: 10px; }
+.bcard { display: block; text-align: left; width: 100%; background: var(--surface); border: 1.5px solid var(--line); border-radius: var(--r-lg); padding: 14px 16px; cursor: pointer; }
+.bcard:active { transform: scale(.995); }
+.bcard-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.bcard-name { font-family: var(--font-display); font-size: var(--name-size, 18px); font-weight: var(--name-weight, 700); line-height: 1.2; }
+.bcard-total b { font-family: var(--font-num); font-size: 24px; font-weight: 700; color: var(--count-ink, var(--accent)); font-variant-numeric: tabular-nums; }
+.bcard-places { list-style: none; margin: 10px 0 0; padding: 8px 0 0; border-top: 1px solid var(--line); display: grid; gap: 4px; }
+.bcard-places li { display: flex; justify-content: space-between; gap: 10px; font-size: 14.5px; }
+.bcard-places b { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.bcard-empty { margin-top: 8px; font-size: 13.5px; color: var(--muted); }
+
+/* Sheets */
+.sheet-wrap { position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
+.sheet-wrap.on-top { z-index: 80; }
+.sheet-scrim { position: absolute; inset: 0; background: rgba(0,0,0,.45); opacity: 0; transition: opacity .18s; }
+.sheet { position: relative; width: 100%; max-width: 560px; max-height: 92vh; max-height: 92dvh; display: flex; flex-direction: column; background: var(--sheet-bg, var(--surface)); color: var(--ink); border-radius: var(--r-sheet, 20px) var(--r-sheet, 20px) 0 0; transform: translateY(24px); opacity: 0; transition: transform .2s ease, opacity .2s ease; box-shadow: 0 -10px 40px rgba(0,0,0,.25); }
+.sheet-wrap.open .sheet-scrim { opacity: 1; }
+.sheet-wrap.open .sheet { transform: none; opacity: 1; }
+.sheet-wrap.full .sheet { height: 100vh; height: 100dvh; max-height: none; border-radius: 0; }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px 6px; padding-top: max(16px, env(safe-area-inset-top)); }
+.sheet-wrap:not(.full) .sheet-head { padding-top: 16px; }
+.sheet-title { margin: 0; font-family: var(--font-display); font-size: 21px; font-weight: var(--title-weight, 700); line-height: 1.2; }
+.sheet-x { flex-shrink: 0; width: 40px; height: 40px; border-radius: 50%; border: 0; background: var(--surface-2); display: inline-flex; align-items: center; justify-content: center; color: var(--ink); }
+.sheet-body { overflow-y: auto; padding: 6px 18px 18px; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+@media (min-width: 620px) { .sheet-wrap { align-items: center; } .sheet { border-radius: var(--r-sheet, 20px); } .sheet-wrap.full .sheet { height: 92vh; border-radius: var(--r-sheet, 20px); } }
+
+/* Bottle detail */
+.bd-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.bd-total { text-align: right; flex-shrink: 0; }
+.bd-total b { display: block; font-family: var(--font-num); font-size: 34px; line-height: 1; color: var(--count-ink, var(--accent)); font-variant-numeric: tabular-nums; }
+.bd-total span { font-size: 12.5px; color: var(--muted); }
+.bd-meta { margin-top: 10px; font-size: 13.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.bd-notes { margin-top: 10px; padding: 10px 12px; border-radius: var(--r); background: var(--surface-2); font-size: 14.5px; }
+.where { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.where-row { padding: 10px 12px; border: 1.5px solid var(--line); border-radius: var(--r); background: var(--surface-2); }
+.where-place { font-size: 15.5px; min-width: 0; }
+.where-ctrl { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.where-ctrl .btn { margin-left: auto; }
+.where-n { min-width: 30px; text-align: center; font-family: var(--font-num); font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.bd-foot { display: flex; justify-content: space-between; margin-top: 16px; }
+.from-one { display: flex; justify-content: space-between; padding: 12px 14px; border-radius: var(--r); background: var(--surface-2); border: 1.5px solid var(--line); }
+.qty-row { display: flex; gap: 10px; align-items: center; }
+
+/* Fields */
+.field { display: block; margin-bottom: 12px; min-width: 0; }
+.field > span:first-child { display: block; font-size: 13.5px; font-weight: 650; color: var(--muted); margin-bottom: 5px; }
+.field input, .field textarea, .search-box input, .add-line input, .inline-edit input, .scanner-manual input {
+  width: 100%; min-height: 46px; padding: 10px 12px; border-radius: var(--r); border: 1.5px solid var(--line-strong, var(--line)); background: var(--input-bg, var(--surface-2)); color: var(--ink); font-size: 16px; outline: none; }
+.field input:focus, .field textarea:focus, .search-box input:focus, .add-line input:focus, .inline-edit input:focus { border-color: var(--accent); }
+.field textarea { resize: vertical; }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.with-btn { display: flex; gap: 6px; }
+.with-btn .icon-btn { height: 46px; width: 46px; flex-shrink: 0; }
+.bform .chips { margin: -4px 0 14px; }
+.form-err { color: var(--danger); font-weight: 600; margin: 10px 0 0; min-height: 1em; }
+.form-err:empty { display: none; }
+
+.stepper { display: inline-flex; align-items: center; border: 1.5px solid var(--line-strong, var(--line)); border-radius: var(--r); overflow: hidden; background: var(--surface-2); }
+.stepper button { width: 48px; height: 48px; border: 0; background: none; font-size: 22px; font-weight: 600; }
+.stepper input { width: 64px; height: 48px; border: 0; border-left: 1.5px solid var(--line); border-right: 1.5px solid var(--line); text-align: center; background: var(--input-bg, transparent); font-family: var(--font-num); font-size: 20px; font-weight: 700; -moz-appearance: textfield; }
+.stepper input::-webkit-outer-spin-button, .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+.search-box { margin-bottom: 12px; }
+.pick-list { display: grid; gap: 8px; }
+.pick-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 12px 14px; border-radius: var(--r); border: 1.5px solid var(--line); background: var(--surface-2); margin-bottom: 8px; }
+.pick-n { font-family: var(--font-num); font-weight: 700; font-size: 18px; }
+
+/* Toast */
+.toast { width: max-content; position: fixed; left: 50%; bottom: calc(var(--toast-bottom, 24px) + env(safe-area-inset-bottom)); transform: translate(-50%, 20px); opacity: 0; pointer-events: none; z-index: 120; display: flex; align-items: center; gap: 14px; max-width: calc(100% - 28px); padding: 10px 10px 10px 16px; border-radius: var(--r); background: var(--toast-bg, #222); color: var(--toast-ink, #fff); box-shadow: 0 8px 30px rgba(0,0,0,.3); font-size: 14.5px; transition: transform .2s, opacity .2s; }
+html.locked .toast { bottom: auto; top: calc(12px + env(safe-area-inset-top)); transform: translate(-50%, -20px); }
+html.locked .toast.show { transform: translate(-50%, 0); }
+.toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.toast button { border: 0; border-radius: calc(var(--r) - 2px); background: var(--toast-btn, rgba(255,255,255,.16)); color: inherit; font-weight: 700; padding: 8px 12px; }
+.toast span { min-width: 0; }
+
+/* Banner */
+.banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px 10px 14px; border-radius: var(--r); background: var(--banner-bg, var(--surface-2)); color: var(--banner-ink, var(--ink)); border: 1.5px solid var(--banner-line, var(--line)); font-size: 14.5px; margin-bottom: 14px; }
+.banner .btn { white-space: nowrap; flex-shrink: 0; }
+.banner.bad { background: var(--danger); color: #fff; border-color: var(--danger); }
+
+/* Scanner */
+.scanner { position: fixed; inset: 0; z-index: 70; background: #000; color: #fff; display: flex; flex-direction: column; padding: max(14px, env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom)); }
+.scanner-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.scanner-head h2 { margin: 0; font-size: 19px; font-family: var(--font-display); }
+.scanner .sheet-x { background: rgba(255,255,255,.15); color: #fff; }
+.scanner-view { position: relative; flex: 1; min-height: 0; border-radius: 16px; overflow: hidden; background: #111; }
+.scanner-view video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.scanner-frame { position: absolute; left: 10%; right: 10%; top: 32%; bottom: 32%; border: 3px solid var(--scan-frame, #fff); border-radius: 14px; box-shadow: 0 0 0 999px rgba(0,0,0,.35); transition: border-color .15s; }
+.scanner.flash .scanner-frame { border-color: #6fdc8c; }
+.scanner.no-cam .scanner-view { flex: 0 0 120px; }
+.scanner-msg { text-align: center; font-size: 15px; margin: 12px 0; min-height: 1.4em; }
+.scanner-manual { display: flex; gap: 8px; }
+.scanner-manual input { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.25); color: #fff; }
+.scanner-manual input::placeholder { color: rgba(255,255,255,.6); }
+
+/* Count check */
+.cc-bar { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cc-prog { font-size: 15px; }
+.cc-prog b { font-family: var(--font-num); font-size: 20px; }
+.cc-prog .warn { color: var(--warn); font-weight: 700; }
+.cc-tools { display: flex; gap: 8px; }
+.cc-progress { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; margin: 10px 0 14px; }
+.cc-progress i { display: block; height: 100%; background: var(--ok); transition: width .2s; }
+.cc-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.cc-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px; border-radius: var(--r); border: 1.5px solid var(--line); background: var(--surface-2); flex-wrap: wrap; }
+.cc-row.ok { border-color: var(--ok); }
+.cc-row.off { border-color: var(--warn); }
+.cc-info { min-width: 0; flex: 1 1 180px; }
+.cc-where { font-size: 13.5px; margin-top: 6px; }
+.cc-exp { font-size: 13.5px; color: var(--muted); margin-top: 6px; }
+.cc-ctrl { display: flex; align-items: center; gap: 6px; }
+.cc-n { min-width: 30px; text-align: center; font-family: var(--font-num); font-size: 22px; font-weight: 700; }
+.cc-row.off .cc-n { color: var(--warn); }
+.ok-btn.on { background: var(--ok); border-color: var(--ok); color: #fff; }
+.fix-list { list-style: none; padding: 0; margin: 0 0 12px; display: grid; gap: 8px; }
+.fix-list li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: var(--r); background: var(--surface-2); }
+.fix-n { font-family: var(--font-num); white-space: nowrap; }
+
+/* Import */
+.imp-file { margin: 0 0 10px; word-break: break-all; }
+.imp-stats { display: flex; gap: 10px; margin-bottom: 10px; }
+.imp-stats div { flex: 1; padding: 12px; border-radius: var(--r); background: var(--surface-2); }
+.imp-stats b { display: block; font-family: var(--font-num); font-size: 26px; line-height: 1.1; }
+.imp-stats span { font-size: 13px; color: var(--muted); }
+details { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 8px; }
+summary { cursor: pointer; font-weight: 650; padding: 6px 0; }
+.imp-list { margin: 6px 0 0; padding-left: 18px; font-size: 14px; display: grid; gap: 4px; }
+
+/* Settings */
+.settings { display: grid; gap: 14px; }
+.set-card { background: var(--surface); border: 1.5px solid var(--line); border-radius: var(--r-lg); padding: 16px; }
+.set-card h3 { margin: 0 0 8px; font-family: var(--font-display); font-size: 18px; }
+.set-card p { margin: 0 0 10px; font-size: 14.5px; }
+.set-card.demo { border-color: var(--accent); }
+.loc-block { padding: 12px 0; border-top: 1px solid var(--line); }
+.loc-block:first-of-type { border-top: 0; padding-top: 4px; }
+.loc-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.loc-line b { font-size: 16.5px; }
+.loc-tools { margin-left: auto; display: flex; align-items: center; gap: 2px; }
+.loc-tools .icon-btn { width: 34px; height: 34px; }
+.spot-list { list-style: none; margin: 6px 0; padding: 0 0 0 12px; border-left: 2px solid var(--line); }
+.spot-list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 2px 0; font-size: 15px; }
+.add-line, .inline-edit { display: flex; gap: 8px; margin-top: 8px; }
+.add-line input, .inline-edit input { min-height: 40px; min-width: 0; }
+.add-line .btn, .inline-edit .btn { white-space: nowrap; flex-shrink: 0; }
+.inline-edit { flex: 1; margin-top: 0; }
+
+/* History */
+.hist-day { font-size: 14px; color: var(--muted); margin: 16px 0 6px; font-family: var(--font); }
+.hist-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.hist-list li { display: grid; grid-template-columns: 72px 1fr; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14.5px; }
+.hist-list time { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 13.5px; padding-top: 1px; }
+
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
+
+/* Long-list picker */
+.picker-search { position: sticky; top: -6px; z-index: 3; background: var(--sheet-bg, var(--surface)); padding-top: 6px; margin-top: -6px; }
+.picker-tools { display: flex; justify-content: space-between; align-items: center; font-size: 13.5px; color: var(--muted); margin: -4px 0 6px; }
+.picker-sel:empty { display: none; }
+.picker-sel { margin-bottom: 10px; }
+.picker-list { list-style: none; margin: 0; padding: 0; }
+.picker-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 50px; padding: 0 4px; border: 0; border-bottom: 1px solid var(--line); background: none; text-align: left; font-size: 16px; }
+.picker-row.on { font-weight: 700; }
+.picker-check { flex: 0 0 24px; height: 24px; border-radius: 6px; border: 1.5px solid var(--line-strong, var(--line)); display: inline-flex; align-items: center; justify-content: center; font-size: 14px; }
+.picker-row.on .picker-check { background: var(--chip-on); border-color: var(--chip-on); color: var(--on-chip-on); }
+.picker-label { flex: 1; min-width: 0; }
+.picker-count { font-family: var(--font-num); color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.app { max-width: 640px; margin: 0 auto; padding: max(14px, env(safe-area-inset-top)) 16px calc(170px + env(safe-area-inset-bottom)); }
+.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 12px; min-height: 48px; }
+.top-left { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.top h1 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 34px; line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.top .back { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 44px; margin-left: -10px; border: 0; background: none; color: var(--accent-text); }
+.top .sum { text-align: right; font-size: 13px; color: var(--muted); flex-shrink: 0; }
+.top .sum b { display: block; font-size: 26px; font-weight: 800; color: var(--count-ink); line-height: 1; font-variant-numeric: tabular-nums; }
+
+/* Search */
+.finder { position: sticky; top: 0; z-index: 12; margin: 0 -16px; padding: 8px 16px 10px; background: var(--bg); }
+.strip { display: flex; align-items: center; background: var(--surface); border: 1.5px solid var(--line-strong); border-radius: 999px; padding: 4px 4px 4px 14px; }
+.strip:focus-within { border-color: var(--accent); }
+.strip > svg { color: var(--muted); flex-shrink: 0; }
+.strip input { flex: 1; min-width: 0; border: 0; outline: none; background: none; padding: 10px; font-size: 17px; color: var(--ink); }
+.strip input::placeholder { color: #8F8473; }
+.strip input::-webkit-search-cancel-button { display: none; }
+.clear-q { border: 0; background: none; color: var(--muted); font-size: 22px; width: 36px; height: 40px; }
+.scan-btn { display: flex; align-items: center; gap: 7px; height: 44px; padding: 0 16px; border: 0; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-weight: 800; font-size: 15px; flex-shrink: 0; }
+.sg-box { position: absolute; left: 16px; right: 16px; top: calc(100% - 4px); z-index: 13; background: var(--sheet-bg); border: 1.5px solid var(--line-strong); border-radius: var(--r-lg); box-shadow: 0 16px 40px rgba(70,45,20,.22); overflow: hidden; }
+.sg-box:empty { display: none; }
+.sg-row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 50px; padding: 0 14px; border: 0; border-top: 1px solid var(--line); background: none; text-align: left; font-size: 16px; }
+.sg-row:first-child { border-top: 0; }
+.sg-row:focus-visible, .sg-row:active { background: var(--surface-2); }
+.sg-row .kind { flex: 0 0 66px; font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.sg-row .lbl { flex: 1; min-width: 0; }
+.sg-row .lbl mark { background: none; color: var(--accent-text); font-weight: 800; }
+.sg-row .cnt { font-weight: 800; color: var(--count-ink); font-variant-numeric: tabular-nums; }
+.sg-hint { padding: 10px 14px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); }
+
+/* Filter rails */
+.rails { display: grid; gap: 8px; margin-top: 4px; }
+.rail { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.rail-label { flex: 0 0 50px; font-size: 13px; font-weight: 700; color: var(--muted); }
+.rail .chips { min-width: 0; flex: 1; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-right: -16px; padding-right: 16px; }
+.rail .chips::-webkit-scrollbar { display: none; }
+.rail .chip { flex-shrink: 0; min-height: 38px; padding: 0 13px; font-size: 14px; background: var(--surface); }
+.rail .chip small { font-weight: 700; color: var(--muted); }
+.rail .chip.on { background: var(--chip-on); border-color: var(--chip-on); color: var(--on-chip-on); }
+.rail .chip.on small { color: inherit; }
+.rail .chip.all { background: transparent; border-style: dashed; color: var(--accent-text); }
+.active-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.active-row:empty { display: none; }
+.active-row .chip { min-height: 32px; font-size: 13.5px; background: var(--tag-finish-bg); color: var(--tag-finish-ink); border-color: transparent; }
+
+/* The building map: the one memorable thing */
+.map-h { display: flex; justify-content: space-between; align-items: baseline; margin: 18px 0 8px; }
+.map-h h2 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 20px; }
+.map-h span { font-size: 13.5px; color: var(--muted); }
+.map { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 10px; }
+.room { border: 2px solid var(--wall); border-radius: 6px; background: var(--surface); padding: 10px; }
+.room-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 0 2px 8px; }
+.room-h b { font-family: var(--font-display); font-weight: 400; font-size: 18px; }
+.room-h span { font-weight: 800; font-size: 18px; color: var(--count-ink); font-variant-numeric: tabular-nums; }
+.room-h small { font-weight: 600; font-size: 13px; color: var(--muted); margin-left: 4px; }
+.spots { display: grid; grid-template-columns: repeat(auto-fill, minmax(98px, 1fr)); gap: 6px; }
+.spot { position: relative; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; gap: 6px; min-height: 64px; padding: 8px 9px; border: 1.5px dashed var(--line-strong); border-radius: 4px; background: var(--input-bg); color: var(--ink); text-align: left; font-size: 13.5px; line-height: 1.2; }
+.spot .sn { font-weight: 600; }
+.spot .sc { font-size: 20px; font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums; }
+.spot.has .sc { color: var(--ink); }
+.spot.loose { border-style: dotted; }
+.map.filtering .spot { opacity: .38; }
+.map.filtering .spot.lit { opacity: 1; background: var(--turq); border: 1.5px solid var(--turq); color: #FFFFFF; }
+.map.filtering .spot.lit .sc { color: #FFFFFF; }
+.map.filtering .spot.lit::after { content: ""; position: absolute; top: 8px; right: 8px; width: 8px; height: 8px; border-radius: 50%; background: #FFFFFF; }
+.room-empty { font-size: 13.5px; color: var(--muted); padding: 2px 2px 4px; }
+.dim-rooms { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; align-items: center; }
+.dim-rooms .lbl { font-size: 13px; color: var(--muted); margin-right: 2px; }
+.dim-room { border: 1.5px solid var(--line-strong); border-radius: 4px; padding: 6px 10px; font-size: 13.5px; color: var(--muted); background: none; }
+
+.loc-strip { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 14px -16px 0; padding: 0 16px; }
+.loc-strip::-webkit-scrollbar { display: none; }
+.loc-pill { flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border: 1.5px solid var(--wall); border-radius: 4px; background: none; color: var(--ink); font-size: 14px; }
+.loc-pill b { color: var(--count-ink); font-weight: 800; font-variant-numeric: tabular-nums; }
+.map { animation: mapIn .18s ease-out; }
+@keyframes mapIn { from { opacity: 0; transform: translateY(-4px); } }
+.result-line { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 22px 0 10px; font-size: 14.5px; color: var(--muted); min-height: 36px; }
+.result-line b { color: var(--ink); }
+.empty { text-align: center; padding: 30px 16px; color: var(--muted); border: 1.5px dashed var(--line-strong); border-radius: var(--r-lg); }
+.empty .btn { margin-top: 12px; }
+
+/* Spot sheet rows */
+.srows { list-style: none; margin: 0; padding: 0; border: 1.5px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.srow { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--line); cursor: pointer; background: var(--surface-2); }
+.srow:first-child { border-top: 0; }
+.srow .nm { font-weight: 650; font-size: 16px; }
+.srow .sub { font-size: 13.5px; color: var(--muted); margin-top: 2px; }
+.srow .ct { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.spot-tools { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 14px; color: var(--muted); }
+
+.fab { position: fixed; right: max(16px, calc(50% - 304px)); bottom: calc(86px + env(safe-area-inset-bottom)); z-index: 20; display: flex; align-items: center; gap: 8px; height: 52px; padding: 0 20px 0 16px; border-radius: 26px; border: 0; background: var(--accent); color: var(--on-accent); font-weight: 800; font-size: 15.5px; box-shadow: 0 8px 24px rgba(70,45,20,.22); }
+.tabs { position: fixed; left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 30; display: flex; justify-content: center; }
+.tabs-in { display: flex; gap: 2px; padding: 5px; width: 100%; max-width: 480px; background: var(--basalt); border: 1.5px solid var(--line-strong); border-radius: 999px; box-shadow: 0 10px 30px rgba(70,45,20,.22); }
+.tab { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; height: 54px; border: 0; border-radius: 999px; background: none; color: #CDBFA6; font-weight: 700; font-size: 12px; }
+.tab svg { width: 20px; height: 20px; }
+.tab[aria-current="page"] { background: var(--accent); color: var(--on-accent); }
+
+.page-sub { color: var(--muted); margin: 0 0 16px; font-size: 15px; }
+.count-loc { background: var(--surface); border: 2px solid var(--wall); border-radius: 6px; padding: 12px 14px; margin-bottom: 10px; }
+.count-loc-h { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.count-loc-h b { font-family: var(--font-display); font-weight: 400; font-size: 20px; }
+.count-loc .chips { margin-top: 10px; }
+
+/* Settings menu and pages */
+.menu { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1.5px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
+.menu + .menu { margin-top: 14px; }
+.menu-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 10px 16px; border: 0; border-top: 1px solid var(--line); background: none; text-align: left; }
+.menu li:first-child .menu-row { border-top: 0; }
+.menu-row .mt { flex: 1; min-width: 0; }
+.menu-row .mt b { display: block; font-size: 16.5px; font-weight: 650; }
+.menu-row .mt span { display: block; font-size: 13.5px; color: var(--muted); margin-top: 1px; }
+.menu-row .chev { color: var(--muted); }
+.menu-row.danger b { color: var(--danger); }
+.menu-note { font-size: 13.5px; color: var(--muted); margin: 8px 4px 0; }
+
+.place-card { background: var(--surface); border: 2px solid var(--wall); border-radius: 6px; padding: 12px 14px; margin-bottom: 12px; }
+.pc-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pc-h .nm { font-family: var(--font-display); font-size: 20px; flex: 1; min-width: 120px; }
+.pc-h .ct { color: var(--muted); font-size: 13.5px; }
+.ord { display: inline-flex; gap: 4px; }
+.ord .icon-btn { width: 36px; height: 36px; font-size: 16px; }
+.pc-spots { list-style: none; margin: 10px 0 4px; padding: 0; }
+.pc-spot { display: flex; align-items: center; gap: 8px; min-height: 50px; padding: 4px 0 4px 10px; border-top: 1px solid var(--line); }
+.pc-spot .nm { flex: 1; min-width: 0; font-size: 15.5px; overflow-wrap: anywhere; }
+.pc-spot .ct { color: var(--muted); font-size: 13.5px; font-variant-numeric: tabular-nums; margin-left: 4px; }
+.pc-spot .ord .icon-btn { width: 36px; height: 36px; }
+.pc-spot .icon-btn.rm { color: var(--danger); font-size: 20px; }
+.pc-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+.add-place { background: var(--surface); border: 1.5px dashed var(--line-strong); border-radius: var(--r-lg); padding: 14px; }
+.add-place h3 { margin: 0 0 4px; font-family: var(--font-display); font-weight: 400; font-size: 18px; }
+.list-rows { list-style: none; margin: 10px 0; padding: 0; border: 1.5px solid var(--line); border-radius: var(--r); overflow: hidden; background: var(--surface); }
+.list-row { display: flex; align-items: center; gap: 10px; min-height: 50px; padding: 4px 6px 4px 14px; border-top: 1px solid var(--line); }
+.list-row:first-child { border-top: 0; }
+.list-row .nm { flex: 1; font-size: 15.5px; }
+.list-row .ct { color: var(--muted); font-size: 13.5px; }
+.list-row button { border: 0; background: none; color: var(--muted); width: 40px; height: 40px; font-size: 20px; }
+.set-section { background: var(--surface); border: 1.5px solid var(--line); border-radius: var(--r-lg); padding: 16px; margin-bottom: 12px; }
+.set-section h3 { margin: 0 0 6px; font-family: var(--font-display); font-weight: 400; font-size: 19px; }
+.set-section p { margin: 0 0 12px; font-size: 14.5px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top" id="top"></header>
+  <main id="main"></main>
+</div>
+<button class="fab" id="fab" type="button"></button>
+<nav class="tabs" aria-label="Pages"><div class="tabs-in" id="tabs"></div></nav>
+
+<script>
+/* ===== Core: data, storage, Excel, moves, count check, history, undo ===== */
+const Core = (() => {
+  "use strict";
+  const KEY = "tastingroom-inventory-v2";
+  const OLD_KEY = "stockroom-inventory-v1";
+  const OLD_ARCHIVE = "stockroom-archive-v1";
+  const MAIN_LOCATIONS = ["Landing", "Chapel", "Office", "Library"];
+  const DEFAULT_TYPES = ["Bourbon", "Wheated Bourbon", "Rye", "Double Rye", "Single Malt", "American Malt", "Blend"];
+  const DEFAULT_FINISHES = ["Cognac", "Malbec", "Cacao", "Port", "Sherry", "Rum", "Maple", "Cabernet", "Coffee", "Toasted Oak"];
+  const DAY = 86400000;
+
+  const uid = () => Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-5);
+  const norm = (s) => String(s == null ? "" : s).trim().toLowerCase().replace(/\s+/g, " ");
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const numOrBlank = (v) => {
+    if (v === null || v === undefined || String(v).trim() === "") return "";
+    const n = parseFloat(String(v).replace(/[^0-9.\-]/g, ""));
+    return isNaN(n) ? "" : n;
+  };
+
+  let S = null;
+  let storageOk = true;
+  const undoStack = [];
+  const subs = new Set();
+
+  function blank() {
+    return {
+      v: 2,
+      locations: MAIN_LOCATIONS.map((name) => ({ id: uid(), name, spots: [] })),
+      types: [...DEFAULT_TYPES],
+      finishes: [...DEFAULT_FINISHES],
+      bottles: [],
+      stock: [],
+      history: [],
+      lastBackupAt: null,
+      lastChangeAt: null,
+      demo: false,
+    };
+  }
+
+  function addStockRaw(s, bottleId, locId, spotId, delta) {
+    let row = s.stock.find((r) => r.bottleId === bottleId && r.locId === locId && (r.spotId || "") === (spotId || ""));
+    if (!row) {
+      row = { id: uid(), bottleId, locId, spotId: spotId || "", count: 0 };
+      s.stock.push(row);
+    }
+    row.count = Math.max(0, row.count + delta);
+    return row;
+  }
+
+  function demo() {
+    const s = blank();
+    s.demo = true;
+    const L = Object.fromEntries(s.locations.map((l) => [l.name, l]));
+    const spot = (loc, name) => { const sp = { id: uid(), name }; L[loc].spots.push(sp); return sp.id; };
+    const sp = {
+      bar: spot("Landing", "Back bar"), wall: spot("Landing", "Display wall"),
+      north: spot("Chapel", "North shelf"), table: spot("Chapel", "Tasting table"),
+      safe: spot("Office", "Safe"), cab: spot("Office", "Desk cabinet"),
+      a: spot("Library", "Cabinet 1"), b: spot("Library", "Cabinet 2"), cart: spot("Library", "Reading cart"),
+    };
+    const add = (f, places) => {
+      const id = uid();
+      s.bottles.push({ id, name: f[0], type: f[1], finish: f[2], finishMonths: f[3], proof: f[4], barrel: f[5], barcode: f[6], notes: f[7] || "", createdAt: Date.now() });
+      places.forEach(([loc, spotId, count]) => addStockRaw(s, id, L[loc].id, spotId, count));
+    };
+    add(["Founder's Reserve", "Bourbon", "Cognac", 8, 104, "47", "850012345671"], [["Chapel", sp.north, 3], ["Library", sp.a, 1]]);
+    add(["Founder's Reserve", "Bourbon", "Malbec", 12, 104, "52", "850012345671"], [["Library", sp.a, 4]]);
+    add(["Founder's Reserve", "Bourbon", "Rum", 9, 104, "55", "850012345671"], [["Landing", sp.bar, 1], ["Library", sp.cart, 2]]);
+    add(["Cellar Door", "Double Rye", "Cacao", 6, 112, "18", "850012345688"], [["Landing", sp.bar, 2], ["Office", sp.safe, 1]]);
+    add(["Cellar Door", "Double Rye", "Port", 10, 112, "21", "850012345688"], [["Chapel", sp.table, 3]]);
+    add(["Cellar Door", "Double Rye", "Coffee", 5, 112, "24", "850012345688"], [["Library", sp.b, 1]]);
+    add(["Highland Hymn", "Single Malt", "Sherry", 14, 98, "9", "850012345695"], [["Library", sp.b, 2]]);
+    add(["Highland Hymn", "Single Malt", "Cabernet", 11, 98, "12", ""], [["Chapel", sp.table, 2]]);
+    add(["Sunday Wheat", "Wheated Bourbon", "", "", 94, "63", "850012345701"], [["Landing", sp.wall, 36], ["Office", sp.cab, 4]]);
+    add(["Maple Hour", "Rye", "Maple", 4, 100, "30", "850012345718"], [["Chapel", sp.north, 2]]);
+    add(["Single Barrel Select", "Bourbon", "", "", 121, "112", "850012345725", "Signed by the distiller"], [["Office", sp.safe, 3]]);
+    add(["Vestry Blend", "Blend", "Toasted Oak", 3, 90, "", "850012345732"], [["Landing", sp.wall, 30]]);
+    const now = Date.now();
+    s.history.push({ t: now - 3 * DAY, text: "Loaded sample inventory" });
+    s.history.push({ t: now - 2 * DAY, text: "Moved 2 Cellar Door, Double Rye, Cacao from Office › Safe to Landing › Back bar" });
+    s.history.push({ t: now - DAY, text: "Count check: Library › Cabinet 1, 1 fix" });
+    s.lastBackupAt = now - 9 * DAY;
+    s.lastChangeAt = now - DAY;
+    return s;
+  }
+
+  function placeFromText(s, text) {
+    const t = String(text || "").trim();
+    const loc = s.locations.find((l) => norm(l.name) === norm(t));
+    if (loc) return { locId: loc.id, spotId: "" };
+    for (const l of s.locations) {
+      const sp = l.spots.find((x) => norm(x.name) === norm(t));
+      if (sp) return { locId: l.id, spotId: sp.id };
+    }
+    let un = s.locations.find((l) => l.name === "Unsorted");
+    if (!un) { un = { id: uid(), name: "Unsorted", spots: [] }; s.locations.push(un); }
+    if (!t) return { locId: un.id, spotId: "" };
+    const sp = { id: uid(), name: t };
+    un.spots.push(sp);
+    return { locId: un.id, spotId: sp.id };
+  }
+
+  function migrateOld() {
+    let items, archive;
+    try {
+      items = JSON.parse(localStorage.getItem(OLD_KEY) || "null");
+      archive = JSON.parse(localStorage.getItem(OLD_ARCHIVE) || "null");
+    } catch (e) { return null; }
+    const all = { ...(archive || {}), ...(items || {}) };
+    if (!Object.keys(all).length) return null;
+    const s = blank();
+    const byKey = {};
+    for (const [key, v] of Object.entries(all)) {
+      const barcode = v.noBarcode ? "" : String(v.sharedBarcode || key.split("::")[0]);
+      const name = v.name || "Unnamed bottle";
+      const barrel = v.batch || "";
+      const k = [norm(name), norm(barcode), norm(barrel)].join("|");
+      let b = byKey[k];
+      if (!b) {
+        b = { id: uid(), name, type: "", finish: "", finishMonths: "", proof: "", barrel, barcode, notes: v.notes || "", createdAt: Date.now() };
+        byKey[k] = b;
+        s.bottles.push(b);
+      }
+      const place = placeFromText(s, v.location || "");
+      addStockRaw(s, b.id, place.locId, place.spotId, Math.max(0, Number(v.count) || 0));
+    }
+    s.stock = s.stock.filter((r) => r.count > 0);
+    s.history.push({ t: Date.now(), text: `Brought over ${s.bottles.length} bottles from the old Stockroom app` });
+    s.lastChangeAt = Date.now();
+    return s;
+  }
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (raw) { S = JSON.parse(raw); return; }
+    } catch (e) { storageOk = false; }
+    S = migrateOld() || demo();
+    save();
+  }
+
+  function save() {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(S));
+      storageOk = true;
+    } catch (e) {
+      storageOk = false;
+    }
+    return storageOk;
+  }
+
+  const emit = () => subs.forEach((fn) => { try { fn(); } catch (e) { console.error(e); } });
+  const on = (fn) => { subs.add(fn); return () => subs.delete(fn); };
+
+  function log(text) {
+    S.history.unshift({ t: Date.now(), text });
+    if (S.history.length > 1500) S.history.length = 1500;
+  }
+
+  function commit(label, fn) {
+    undoStack.push({ label, snap: JSON.stringify(S) });
+    if (undoStack.length > 40) undoStack.shift();
+    fn();
+    S.stock = S.stock.filter((r) => r.count > 0);
+    S.lastChangeAt = Date.now();
+    log(label);
+    save();
+    emit();
+  }
+
+  function undo() {
+    const last = undoStack.pop();
+    if (!last) return null;
+    S = JSON.parse(last.snap);
+    log(`Undid: ${last.label}`);
+    save();
+    emit();
+    return last.label;
+  }
+  const canUndo = () => undoStack.length > 0;
+  const lastUndoLabel = () => (undoStack.length ? undoStack[undoStack.length - 1].label : "");
+
+  /* ---------- Lookups ---------- */
+  const state = () => S;
+  const loc = (id) => S.locations.find((l) => l.id === id);
+  const spot = (locId, spotId) => { const l = loc(locId); return l && spotId ? l.spots.find((s) => s.id === spotId) : null; };
+  const bottle = (id) => S.bottles.find((b) => b.id === id);
+  const placeName = (locId, spotId) => {
+    const l = loc(locId); const sp = spot(locId, spotId);
+    return (l ? l.name : "Unknown") + (sp ? ` › ${sp.name}` : "");
+  };
+  const finishText = (b) => (b.finish ? `${b.finish}${b.finishMonths !== "" && b.finishMonths != null ? `, ${b.finishMonths} mo` : ""}` : "No finish");
+  const fullName = (b) => [b.name, b.type, b.finish ? `${b.finish} finish` : ""].filter(Boolean).join(", ");
+  const stockFor = (bottleId) => S.stock.filter((r) => r.bottleId === bottleId && r.count > 0)
+    .sort((a, b) => S.locations.indexOf(loc(a.locId)) - S.locations.indexOf(loc(b.locId)) || placeName(a.locId, a.spotId).localeCompare(placeName(b.locId, b.spotId)));
+  const totalFor = (bottleId) => stockFor(bottleId).reduce((n, r) => n + r.count, 0);
+  const totalAll = () => S.stock.reduce((n, r) => n + r.count, 0);
+  const rowsAt = (locId, spotId) => S.stock.filter((r) => r.count > 0 && r.locId === locId && (spotId === undefined || spotId === null || (r.spotId || "") === spotId));
+  const totalAt = (locId, spotId) => rowsAt(locId, spotId).reduce((n, r) => n + r.count, 0);
+  const byBarcode = (code) => { const c = norm(code); return c ? S.bottles.filter((b) => norm(b.barcode) === c) : []; };
+
+  function haystack(b) {
+    return norm([b.name, b.type, b.finish, b.finish ? `${b.finish} finish` : "no finish", b.barrel ? `barrel ${b.barrel} #${b.barrel}` : "", b.barcode, b.notes, b.proof ? `${b.proof} proof` : ""].join(" "));
+  }
+
+  /* filters: { q, types:[], finishes:[], locs:[], showEmpty } */
+  function filterBottles(f = {}) {
+    const tokens = norm(f.q).split(" ").filter(Boolean);
+    const out = [];
+    for (const b of S.bottles) {
+      if (f.types && f.types.length && !f.types.includes(b.type)) continue;
+      if (f.finishes && f.finishes.length && !f.finishes.includes(b.finish || "")) continue;
+      if (f.barrel && norm(b.barrel) !== norm(f.barrel)) continue;
+      let rows = stockFor(b.id);
+      if (f.locs && f.locs.length) rows = rows.filter((r) => f.locs.includes(r.locId));
+      if (f.spots && f.spots.length) rows = rows.filter((r) => f.spots.includes(r.locId + "|" + (r.spotId || "")));
+      const total = rows.reduce((n, r) => n + r.count, 0);
+      if (!f.showEmpty && total === 0) continue;
+      if (f.locs && f.locs.length && rows.length === 0) continue;
+      if (f.spots && f.spots.length && rows.length === 0) continue;
+      if (tokens.length) { const h = haystack(b); if (!tokens.every((t) => h.includes(t))) continue; }
+      out.push({ b, rows, total });
+    }
+    out.sort((x, y) => x.b.name.localeCompare(y.b.name) || (x.b.type || "").localeCompare(y.b.type || "") || finishText(x.b).localeCompare(finishText(y.b)) || String(x.b.barrel).localeCompare(String(y.b.barrel), undefined, { numeric: true }));
+    return out;
+  }
+  const filterActive = (f) => !!(norm(f.q) || f.barrel || (f.spots && f.spots.length) || (f.types && f.types.length) || (f.finishes && f.finishes.length) || (f.locs && f.locs.length));
+  /* on-hand units per value of a field, under every filter except that field's own */
+  function facetCounts(field, f = {}) {
+    const key = field === "type" ? "types" : field === "finish" ? "finishes" : null;
+    const g = { ...f, showEmpty: false };
+    if (key) g[key] = [];
+    const m = new Map();
+    filterBottles(g).forEach(({ b, total }) => { const k = b[field] || ""; m.set(k, (m.get(k) || 0) + total); });
+    return m;
+  }
+  function locCounts(f = {}) {
+    const m = new Map();
+    filterBottles({ ...f, locs: [] }).forEach(({ rows }) => rows.forEach((r) => m.set(r.locId, (m.get(r.locId) || 0) + r.count)));
+    return m;
+  }
+  /* on-hand units per "locId|spotId" under the current filters */
+  function spotCounts(f = {}) {
+    const m = new Map();
+    filterBottles(f).forEach(({ rows }) => rows.forEach((r) => { const k = r.locId + "|" + (r.spotId || ""); m.set(k, (m.get(k) || 0) + r.count); }));
+    return m;
+  }
+  /* how many bottles use each type/finish (for ranking pick lists) */
+  function usage(field) {
+    const m = new Map();
+    S.bottles.forEach((b) => { if (b[field]) m.set(b[field], (m.get(b[field]) || 0) + 1 + totalFor(b.id) / 1000); });
+    return m;
+  }
+  /* rank a list for a text query: starts-with first, then contains; no query = most used first */
+  function rankList(list, q, field, limit = 8) {
+    const n = norm(q); const use = usage(field);
+    let out;
+    if (!n) out = [...list].sort((a, b) => (use.get(b) || 0) - (use.get(a) || 0) || a.localeCompare(b));
+    else {
+      const hits = list.filter((x) => norm(x).includes(n));
+      out = hits.sort((a, b) => (norm(b).startsWith(n) - norm(a).startsWith(n)) || (use.get(b) || 0) - (use.get(a) || 0) || a.localeCompare(b));
+    }
+    return out.slice(0, limit);
+  }
+  /* search-bar suggestions that turn typed text into a filter */
+  function suggest(q, f = {}) {
+    const n = norm(q); if (n.length < 2) return [];
+    const out = [];
+    const starts = (x) => norm(x).startsWith(n);
+    const fc = facetCounts("finish", f), tc = facetCounts("type", f), lc = locCounts(f);
+    const pick = (list, kind, counts) => list.filter((x) => x && norm(x).includes(n))
+      .map((x) => ({ kind, value: x, label: x, count: counts.get(x) || 0, s: starts(x) }))
+      .filter((x) => x.count > 0)
+      .sort((a, b) => b.s - a.s || b.count - a.count || a.label.localeCompare(b.label));
+    out.push(...pick(finishesInUse(), "finish", fc).slice(0, 4));
+    out.push(...pick(typesInUse(), "type", tc).slice(0, 3));
+    out.push(...S.locations.filter((l) => norm(l.name).includes(n)).map((l) => ({ kind: "loc", value: l.id, label: l.name, count: lc.get(l.id) || 0, s: starts(l.name) })).filter((x) => x.count > 0));
+    const scnt = spotCounts({ ...f, spots: [] });
+    S.locations.forEach((l) => l.spots.forEach((sp) => {
+      const full = `${l.name} ${sp.name}`;
+      if (norm(sp.name).includes(n) || norm(full).includes(n)) {
+        const k = l.id + "|" + sp.id;
+        const c = scnt.get(k) || 0;
+        if (c) out.push({ kind: "spot", value: k, label: `${l.name} › ${sp.name}`, count: c, s: starts(sp.name) });
+      }
+    }));
+    const m = n.match(/^(?:barrel\s*#?|#)?\s*(\w+)$/);
+    if (m) {
+      const bc = new Map();
+      filterBottles({ ...f, barrel: "" }).forEach(({ b, total }) => { if (b.barrel && norm(b.barrel) === m[1]) bc.set(b.barrel, (bc.get(b.barrel) || 0) + total); });
+      bc.forEach((count, v) => out.unshift({ kind: "barrel", value: v, label: `Barrel ${v}`, count, s: true }));
+    }
+    return out.slice(0, 8);
+  }
+  const typesInUse = () => [...new Set([...S.types, ...S.bottles.map((b) => b.type).filter(Boolean)])];
+  const finishesInUse = () => [...new Set([...S.finishes, ...S.bottles.map((b) => b.finish).filter(Boolean)])];
+
+  /* ---------- Mutations ---------- */
+  function identity(f) {
+    return [norm(f.name), norm(f.type), norm(f.finish), norm(f.finishMonths), norm(f.barrel)].join("|");
+  }
+  const findSame = (f, s = S) => s.bottles.find((b) => identity(b) === identity(f));
+
+  function cleanFields(f) {
+    return {
+      name: String(f.name || "").trim() || "Unnamed bottle",
+      type: String(f.type || "").trim(),
+      finish: String(f.finish || "").trim(),
+      finishMonths: numOrBlank(f.finishMonths),
+      proof: numOrBlank(f.proof),
+      barrel: String(f.barrel == null ? "" : f.barrel).trim(),
+      barcode: String(f.barcode == null ? "" : f.barcode).trim(),
+      notes: String(f.notes || "").trim(),
+    };
+  }
+  function rememberLists(s, f) {
+    if (f.type && !s.types.some((t) => norm(t) === norm(f.type))) s.types.push(f.type);
+    if (f.finish && !s.finishes.some((t) => norm(t) === norm(f.finish))) s.finishes.push(f.finish);
+  }
+
+  /* returns { id, merged } */
+  function addBottle(fields, place, count) {
+    const f = cleanFields(fields);
+    const same = findSame(f);
+    let id = same ? same.id : uid();
+    const n = Math.max(0, Math.round(count || 0));
+    const where = place && place.locId ? ` to ${placeName(place.locId, place.spotId)}` : "";
+    commit(same ? `Added ${n} ${fullName(same)}${where}` : `New bottle: ${fullName(f)}${n ? `, ${n}${where}` : ""}`, () => {
+      if (!same) S.bottles.push({ id, ...f, createdAt: Date.now() });
+      rememberLists(S, f);
+      if (place && place.locId && n > 0) addStockRaw(S, id, place.locId, place.spotId || "", n);
+    });
+    return { id, merged: !!same };
+  }
+
+  function updateBottle(id, fields) {
+    const b = bottle(id); if (!b) return;
+    const f = cleanFields(fields);
+    commit(`Edited ${fullName(f)}`, () => { Object.assign(bottle(id), f); rememberLists(S, f); });
+  }
+
+  function deleteBottle(id) {
+    const b = bottle(id); if (!b) return;
+    commit(`Deleted ${fullName(b)}`, () => {
+      S.bottles = S.bottles.filter((x) => x.id !== id);
+      S.stock = S.stock.filter((r) => r.bottleId !== id);
+    });
+  }
+
+  function changeCount(bottleId, locId, spotId, delta) {
+    const b = bottle(bottleId); if (!b || !delta) return;
+    const sign = delta > 0 ? `+${delta}` : `${delta}`;
+    commit(`${sign} ${fullName(b)} at ${placeName(locId, spotId)}`, () => addStockRaw(S, bottleId, locId, spotId, delta));
+  }
+
+  function setCount(bottleId, locId, spotId, n) {
+    const b = bottle(bottleId); if (!b) return;
+    const row = S.stock.find((r) => r.bottleId === bottleId && r.locId === locId && (r.spotId || "") === (spotId || ""));
+    const before = row ? row.count : 0;
+    if (before === n) return;
+    commit(`Set ${fullName(b)} at ${placeName(locId, spotId)} to ${n} (was ${before})`, () => addStockRaw(S, bottleId, locId, spotId, n - before));
+  }
+
+  function move(bottleId, from, to, qty) {
+    const b = bottle(bottleId); if (!b) return false;
+    const row = S.stock.find((r) => r.bottleId === bottleId && r.locId === from.locId && (r.spotId || "") === (from.spotId || ""));
+    const n = Math.min(row ? row.count : 0, Math.max(1, Math.round(qty)));
+    if (!n) return false;
+    if (from.locId === to.locId && (from.spotId || "") === (to.spotId || "")) return false;
+    commit(`Moved ${n} ${fullName(b)} from ${placeName(from.locId, from.spotId)} to ${placeName(to.locId, to.spotId)}`, () => {
+      addStockRaw(S, bottleId, from.locId, from.spotId, -n);
+      addStockRaw(S, bottleId, to.locId, to.spotId, n);
+    });
+    return n;
+  }
+
+  /* ---------- Locations, spots, lists ---------- */
+  function addLocation(name) {
+    name = String(name || "").trim(); if (!name) return;
+    if (S.locations.some((l) => norm(l.name) === norm(name))) return "exists";
+    commit(`Added location ${name}`, () => S.locations.push({ id: uid(), name, spots: [] }));
+  }
+  function renameLocation(id, name) {
+    name = String(name || "").trim(); const l = loc(id); if (!l || !name || l.name === name) return;
+    const old = l.name;
+    commit(`Renamed location ${old} to ${name}`, () => { loc(id).name = name; });
+  }
+  function removeLocation(id) {
+    const l = loc(id); if (!l) return;
+    if (totalAt(id) > 0) return "not-empty";
+    commit(`Removed location ${l.name}`, () => { S.locations = S.locations.filter((x) => x.id !== id); });
+  }
+  function moveLocation(id, dir) {
+    const i = S.locations.findIndex((l) => l.id === id); const j = i + dir;
+    if (i < 0 || j < 0 || j >= S.locations.length) return;
+    commit(`Reordered locations`, () => { const [x] = S.locations.splice(i, 1); S.locations.splice(j, 0, x); });
+  }
+  function moveSpot(locId, spotId, dir) {
+    const l = loc(locId); if (!l) return;
+    const i = l.spots.findIndex((s) => s.id === spotId); const j = i + dir;
+    if (i < 0 || j < 0 || j >= l.spots.length) return;
+    commit(`Reordered spots in ${l.name}`, () => { const L = loc(locId); const [x] = L.spots.splice(i, 1); L.spots.splice(j, 0, x); });
+  }
+  function addSpot(locId, name) {
+    name = String(name || "").trim(); const l = loc(locId); if (!l || !name) return;
+    if (l.spots.some((s) => norm(s.name) === norm(name))) return "exists";
+    commit(`Added spot ${l.name} › ${name}`, () => loc(locId).spots.push({ id: uid(), name }));
+  }
+  function renameSpot(locId, spotId, name) {
+    name = String(name || "").trim(); const sp = spot(locId, spotId); if (!sp || !name || sp.name === name) return;
+    const old = placeName(locId, spotId);
+    commit(`Renamed spot ${old} to ${name}`, () => { spot(locId, spotId).name = name; });
+  }
+  function removeSpot(locId, spotId) {
+    const sp = spot(locId, spotId); if (!sp) return;
+    const label = placeName(locId, spotId);
+    commit(`Removed spot ${label}`, () => {
+      S.stock.filter((r) => r.locId === locId && r.spotId === spotId).forEach((r) => {
+        addStockRaw(S, r.bottleId, locId, "", r.count); r.count = 0;
+      });
+      const l = loc(locId); l.spots = l.spots.filter((s) => s.id !== spotId);
+    });
+  }
+  function addListItem(list, value) {
+    value = String(value || "").trim(); if (!value) return;
+    if (S[list].some((t) => norm(t) === norm(value))) return "exists";
+    commit(`Added ${list === "types" ? "type" : "finish"} ${value}`, () => S[list].push(value));
+  }
+  function removeListItem(list, value) {
+    commit(`Removed ${list === "types" ? "type" : "finish"} ${value} from the pick list`, () => { S[list] = S[list].filter((t) => t !== value); });
+  }
+
+  /* ---------- Count check ---------- */
+  /* results: [{ bottleId, locId, spotId, expected, found }] — found null = not checked */
+  function applyCountCheck(label, results) {
+    const fixes = results.filter((r) => r.found !== null && r.found !== r.expected);
+    if (!fixes.length) { commit(`Count check: ${label}, all correct`, () => {}); return 0; }
+    commit(`Count check: ${label}, ${fixes.length} fix${fixes.length === 1 ? "" : "es"}`, () => {
+      fixes.forEach((r) => addStockRaw(S, r.bottleId, r.locId, r.spotId, r.found - r.expected));
+    });
+    return fixes.length;
+  }
+
+  /* ---------- Excel ---------- */
+  const HEAD = {
+    name: ["name", "bottle", "bottle name", "item", "item name", "product", "product name", "description", "title"],
+    type: ["type", "whiskey type", "whisky type", "spirit", "style", "category"],
+    finish: ["finish", "finished in", "cask finish", "barrel finish"],
+    finishMonths: ["finish time (months)", "finish time", "finish months", "months", "finish length", "time in finish"],
+    proof: ["proof", "abv"],
+    barrel: ["barrel", "barrel #", "barrel number", "barrel no", "barrel no.", "batch", "batch/lot", "lot"],
+    barcode: ["barcode", "upc", "ean", "sku", "code", "barcode #", "barcode number"],
+    location: ["location", "room", "area"],
+    spot: ["spot", "shelf", "bin", "sub-location", "sublocation", "position"],
+    count: ["count", "qty", "quantity", "bottles", "on hand", "units", "amount", "total"],
+    notes: ["notes", "note", "comments", "comment", "remarks"],
+  };
+
+  function readRow(row) {
+    const out = {};
+    for (const k of Object.keys(row)) {
+      const lk = norm(k);
+      for (const [field, keys] of Object.entries(HEAD)) {
+        if (out[field] === undefined && keys.includes(lk)) { out[field] = row[k]; break; }
+      }
+    }
+    return out;
+  }
+
+  async function parseFile(file) {
+    if (typeof XLSX === "undefined") throw new Error("The Excel tool didn't load. Connect to the internet and try again.");
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: "array" });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    return XLSX.utils.sheet_to_json(sheet, { defval: "" }).map(readRow);
+  }
+
+  /* Runs rows against a copy of the inventory; returns { draft, merged, created, skipped } */
+  function planImport(rows) {
+    const draft = clone(S);
+    const merged = [], created = [], skipped = [];
+    const newIds = new Set();
+    const hadSpots = new Set(draft.locations.filter((l) => l.spots.length).map((l) => l.id));
+    rows.forEach((r, i) => {
+      const rowNo = i + 2;
+      const hasName = String(r.name || "").trim() !== "";
+      const code = String(r.barcode == null ? "" : r.barcode).trim();
+      if (!hasName && !code) { skipped.push(`Row ${rowNo}: no name or barcode`); return; }
+      const count = Math.max(0, Math.round(Number(String(r.count).replace(/[^0-9.\-]/g, "")) || 0));
+      let b = null;
+      let f = null;
+      if (hasName) {
+        f = cleanFields(r);
+        b = draft.bottles.find((x) => identity(x) === identity(f));
+      } else {
+        const hits = draft.bottles.filter((x) => norm(x.barcode) === norm(code));
+        if (hits.length === 1) b = hits[0];
+        else if (hits.length > 1) { skipped.push(`Row ${rowNo}: barcode ${code} fits ${hits.length} finishes. Add a name and finish.`); return; }
+        else { skipped.push(`Row ${rowNo}: barcode ${code} isn't in your inventory and has no name`); return; }
+      }
+      let isNew = false;
+      if (!b) {
+        b = { id: uid(), ...f, createdAt: Date.now() };
+        draft.bottles.push(b);
+        rememberLists(draft, f);
+        isNew = true;
+        newIds.add(b.id);
+      } else if (f) {
+        if (b.proof === "" && f.proof !== "") b.proof = f.proof;
+        if (!b.barcode && f.barcode) b.barcode = f.barcode;
+        if (!b.notes && f.notes) b.notes = f.notes;
+      }
+      let place = null;
+      const locName = String(r.location || "").trim();
+      const spotName = String(r.spot || "").trim();
+      if (count > 0) {
+        let l = draft.locations.find((x) => norm(x.name) === norm(locName));
+        if (!l && locName) { l = { id: uid(), name: locName, spots: [] }; draft.locations.push(l); }
+        if (!l) place = placeFromText(draft, spotName);
+        else if (!spotName) place = { locId: l.id, spotId: "" };
+        else {
+          let sp = l.spots.find((x) => norm(x.name) === norm(spotName));
+          if (!sp) { sp = { id: uid(), name: spotName }; l.spots.push(sp); }
+          place = { locId: l.id, spotId: sp.id };
+        }
+      }
+      const label = [b.name, b.type, b.finish ? `${b.finish} finish` : ""].filter(Boolean).join(", ");
+      const where = place ? (() => {
+        const l = draft.locations.find((x) => x.id === place.locId);
+        const sp = l && place.spotId ? l.spots.find((x) => x.id === place.spotId) : null;
+        return (l ? l.name : "") + (sp ? ` › ${sp.name}` : "");
+      })() : "";
+      if (place) {
+        const before = (draft.stock.find((x) => x.bottleId === b.id && x.locId === place.locId && (x.spotId || "") === (place.spotId || "")) || { count: 0 }).count;
+        addStockRaw(draft, b.id, place.locId, place.spotId, count);
+        if (newIds.has(b.id)) created.push(`${label}${b.barrel ? ", barrel " + b.barrel : ""}: ${count} at ${where}`);
+        else merged.push(`${label}${b.barrel ? ", barrel " + b.barrel : ""} at ${where}: ${before} + ${count} = ${before + count}`);
+      } else if (isNew) {
+        created.push(`${label}: none in stock`);
+      } else {
+        skipped.push(`Row ${rowNo}: ${label} had a count of 0`);
+      }
+    });
+    draft.stock = draft.stock.filter((r) => r.count > 0);
+    draft.locations.forEach((l) => { if (!hadSpots.has(l.id)) l.spots.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })); });
+    return { draft, merged, created, skipped, newCount: newIds.size };
+  }
+
+  function applyImport(plan, fileName) {
+    commit(`Imported ${fileName}: ${plan.merged.length} added to existing, ${plan.newCount} new bottles`, () => {
+      const keepHistory = S.history;
+      S = plan.draft;
+      S.history = keepHistory;
+    });
+  }
+
+  function exportRows() {
+    const rows = [];
+    const bottles = [...S.bottles].sort((a, b) => a.name.localeCompare(b.name) || finishText(a).localeCompare(finishText(b)));
+    for (const b of bottles) {
+      const base = { Name: b.name, Type: b.type, Finish: b.finish, "Finish Time (months)": b.finishMonths, Proof: b.proof, Barrel: b.barrel, Barcode: b.barcode };
+      const st = stockFor(b.id);
+      if (!st.length) rows.push({ ...base, Location: "", Spot: "", Count: 0, Notes: b.notes });
+      st.forEach((r) => {
+        const sp = spot(r.locId, r.spotId);
+        rows.push({ ...base, Location: (loc(r.locId) || {}).name || "", Spot: sp ? sp.name : "", Count: r.count, Notes: b.notes });
+      });
+    }
+    return rows;
+  }
+
+  function exportXlsx() {
+    if (typeof XLSX === "undefined") throw new Error("The Excel tool didn't load. Connect to the internet and try again.");
+    const rows = exportRows();
+    const ws = XLSX.utils.json_to_sheet(rows, { header: ["Name", "Type", "Finish", "Finish Time (months)", "Proof", "Barrel", "Barcode", "Location", "Spot", "Count", "Notes"] });
+    ws["!cols"] = [28, 16, 14, 10, 8, 10, 16, 12, 16, 8, 30].map((wch) => ({ wch }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Inventory");
+    const stamp = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `bottle-inventory-${stamp}.xlsx`);
+    S.lastBackupAt = Date.now();
+    log(`Exported to Excel (${rows.length} rows)`);
+    save();
+    emit();
+  }
+
+  function backupStatus() {
+    const changed = S.lastChangeAt && (!S.lastBackupAt || S.lastChangeAt > S.lastBackupAt);
+    const days = S.lastBackupAt ? Math.floor((Date.now() - S.lastBackupAt) / DAY) : null;
+    return { due: !!changed && (days === null || days >= 7), days, never: !S.lastBackupAt };
+  }
+
+  function clearSample() {
+    const keepLocs = S.locations.filter((l) => MAIN_LOCATIONS.includes(l.name)).map((l) => ({ ...l, spots: [] }));
+    commit("Cleared the sample bottles", () => {
+      const fresh = blank();
+      fresh.locations = keepLocs.length ? keepLocs : fresh.locations;
+      fresh.history = S.history;
+      S = fresh;
+    });
+    undoStack.length = 0;
+  }
+  function eraseAll() {
+    S = blank();
+    undoStack.length = 0;
+    log("Erased everything");
+    save();
+    emit();
+  }
+
+  load();
+
+  return {
+    state, on, undo, canUndo, lastUndoLabel, isStorageOk: () => storageOk,
+    loc, spot, bottle, placeName, finishText, fullName, stockFor, totalFor, totalAll, rowsAt, totalAt, byBarcode,
+    filterBottles, filterActive, typesInUse, finishesInUse, findSame, facetCounts, locCounts, rankList, suggest, usage,
+    addBottle, updateBottle, deleteBottle, changeCount, setCount, move,
+    addLocation, renameLocation, removeLocation, moveLocation, moveSpot, spotCounts, addSpot, renameSpot, removeSpot, addListItem, removeListItem,
+    applyCountCheck, parseFile, planImport, applyImport, exportXlsx, backupStatus, clearSample, eraseAll, norm,
+  };
+})();
+
+</script>
+<script>
+/* ===== Shared UI: sheets, bottle details, move, forms, scanner, count check, import, settings, history ===== */
+const UI = (() => {
+  "use strict";
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many || one + "s"}`;
+
+  /* ---------- Sheets ---------- */
+  const openSheets = [];
+  function sheet({ title = "", cls = "", top = false } = {}) {
+    const wrap = document.createElement("div");
+    wrap.className = `sheet-wrap ${cls}${top ? " on-top" : ""}`;
+    wrap.innerHTML = `<div class="sheet-scrim" data-close></div>
+      <div class="sheet" role="dialog" aria-modal="true">
+        <div class="sheet-head"><h2 class="sheet-title"></h2><button type="button" class="sheet-x" data-close aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+        <div class="sheet-body"></div>
+      </div>`;
+    document.body.appendChild(wrap);
+    const closers = [];
+    const api = {
+      el: wrap,
+      body: $(".sheet-body", wrap),
+      setTitle(t) { $(".sheet-title", wrap).textContent = t; $(".sheet", wrap).setAttribute("aria-label", t); },
+      onClose(fn) { closers.push(fn); },
+      close() {
+        if (!wrap.isConnected) return;
+        closers.forEach((fn) => fn());
+        wrap.classList.remove("open");
+        const i = openSheets.indexOf(api); if (i >= 0) openSheets.splice(i, 1);
+        setTimeout(() => wrap.remove(), 180);
+        if (!openSheets.length) document.documentElement.classList.remove("locked");
+      },
+    };
+    api.setTitle(title);
+    wrap.addEventListener("click", (e) => { if (e.target.closest("[data-close]")) api.close(); });
+    openSheets.push(api);
+    document.documentElement.classList.add("locked");
+    requestAnimationFrame(() => wrap.classList.add("open"));
+    return api;
+  }
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && openSheets.length) openSheets[openSheets.length - 1].close();
+    if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[data-open]")) { e.preventDefault(); openBottle(e.target.dataset.open); }
+  });
+  document.addEventListener("click", (e) => {
+    const o = e.target.closest("[data-open]");
+    if (o && !e.target.closest("button:not([data-open])")) { openBottle(o.dataset.open); return; }
+    if (e.target.closest("[data-act='backup-now']")) doExport();
+  });
+
+  /* ---------- Toast ---------- */
+  let toastEl = null, toastTimer = null;
+  function toast(msg, { undo = false } = {}) {
+    if (!toastEl) {
+      toastEl = document.createElement("div");
+      toastEl.className = "toast";
+      toastEl.setAttribute("role", "status");
+      document.body.appendChild(toastEl);
+      toastEl.addEventListener("click", (e) => {
+        if (e.target.closest("[data-undo]")) { const l = Core.undo(); toastEl.classList.remove("show"); if (l) setTimeout(() => toast("Undone"), 120); }
+      });
+    }
+    toastEl.innerHTML = `<span>${esc(msg)}</span>${undo ? `<button type="button" data-undo>Undo</button>` : ""}`;
+    toastEl.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove("show"), undo ? 5000 : 2600);
+  }
+
+  function confirmSheet({ title, text, ok = "OK", danger = false, onOk }) {
+    const sh = sheet({ title, cls: "small", top: true });
+    sh.body.innerHTML = `<p class="lead">${esc(text)}</p>
+      <div class="actions"><button type="button" class="btn ghost" data-close>Cancel</button><button type="button" class="btn ${danger ? "danger" : "primary"}" data-ok>${esc(ok)}</button></div>`;
+    sh.body.querySelector("[data-ok]").addEventListener("click", () => { sh.close(); onOk(); });
+  }
+
+  /* ---------- Bits ---------- */
+  function tagsHtml(b, { proof = true } = {}) {
+    const t = [];
+    if (b.type) t.push(`<span class="tag t-type">${esc(b.type)}</span>`);
+    t.push(`<span class="tag t-finish${b.finish ? "" : " none"}">${esc(Core.finishText(b))}</span>`);
+    if (b.barrel) t.push(`<span class="tag t-barrel">Barrel ${esc(b.barrel)}</span>`);
+    if (proof && b.proof !== "" && b.proof != null) t.push(`<span class="tag t-proof">${esc(b.proof)} proof</span>`);
+    return `<div class="tags">${t.join("")}</div>`;
+  }
+  function placeHtml(locId, spotId) {
+    const l = Core.loc(locId); const sp = Core.spot(locId, spotId);
+    return `<span class="pl"><span class="pl-loc">${esc(l ? l.name : "Unknown")}</span>${sp ? `<span class="pl-spot">${esc(sp.name)}</span>` : ""}</span>`;
+  }
+  function bottleCard({ b, rows, total }, { showPlaces = true } = {}) {
+    return `<div class="bcard" role="button" tabindex="0" data-open="${b.id}" aria-label="${esc(Core.fullName(b))}, ${total} on hand">
+      <div class="bcard-top"><div class="bcard-name">${esc(b.name)}</div><div class="bcard-total"><b>${total}</b></div></div>
+      ${tagsHtml(b)}
+      ${showPlaces && rows.length ? `<ul class="bcard-places">${rows.map((r) => `<li>${placeHtml(r.locId, r.spotId)}<b>${r.count}</b></li>`).join("")}</ul>` : ""}
+      ${showPlaces && !rows.length ? `<div class="bcard-empty">None on hand</div>` : ""}
+    </div>`;
+  }
+  const stepperHtml = (n, { min = 0, max = 9999, label = "" } = {}) =>
+    `<div class="stepper" data-min="${min}" data-max="${max}">
+      <button type="button" data-step="-1" aria-label="One fewer${label ? " " + esc(label) : ""}">−</button>
+      <input type="number" inputmode="numeric" min="${min}" max="${max}" value="${n}" aria-label="Quantity" />
+      <button type="button" data-step="1" aria-label="One more${label ? " " + esc(label) : ""}">+</button>
+    </div>`;
+  function wireStepper(root, onChange) {
+    root.addEventListener("click", (e) => {
+      const b = e.target.closest(".stepper [data-step]"); if (!b) return;
+      const st = b.closest(".stepper"); const inp = st.querySelector("input");
+      const v = Math.min(+st.dataset.max, Math.max(+st.dataset.min, (parseInt(inp.value, 10) || 0) + +b.dataset.step));
+      inp.value = v; onChange && onChange(v, st);
+    });
+    root.addEventListener("input", (e) => {
+      const inp = e.target.closest(".stepper input"); if (!inp) return;
+      const st = inp.closest(".stepper");
+      onChange && onChange(Math.min(+st.dataset.max, Math.max(+st.dataset.min, parseInt(inp.value, 10) || 0)), st);
+    });
+  }
+
+  /* place picker: pp = { locId, spotId } */
+  function placePickerHtml(pp, { exclude } = {}) {
+    const S = Core.state();
+    const l = Core.loc(pp.locId);
+    return `<div class="pp">
+      <div class="chips" role="group" aria-label="Location">${S.locations.map((x) => `<button type="button" class="chip${x.id === pp.locId ? " on" : ""}" data-pp-loc="${x.id}" aria-pressed="${x.id === pp.locId}">${esc(x.name)}</button>`).join("")}</div>
+      ${l ? `<div class="pp-spots"><div class="field-hint">Spot in ${esc(l.name)}</div><div class="chips" role="group" aria-label="Spot">
+        <button type="button" class="chip${!pp.spotId ? " on" : ""}" data-pp-spot="" aria-pressed="${!pp.spotId}">No spot</button>
+        ${l.spots.map((s) => {
+          const same = exclude && exclude.locId === l.id && (exclude.spotId || "") === s.id;
+          return `<button type="button" class="chip${s.id === pp.spotId ? " on" : ""}" data-pp-spot="${s.id}" aria-pressed="${s.id === pp.spotId}"${same ? " disabled" : ""}>${esc(s.name)}</button>`;
+        }).join("")}
+      </div>${l.spots.length ? "" : `<div class="field-hint">Add spots for ${esc(l.name)} in Settings.</div>`}</div>` : ""}
+    </div>`;
+  }
+  function handlePlaceClick(e, pp) {
+    const lb = e.target.closest("[data-pp-loc]");
+    if (lb) { pp.locId = lb.dataset.ppLoc; pp.spotId = ""; return true; }
+    const sb = e.target.closest("[data-pp-spot]");
+    if (sb) { pp.spotId = sb.dataset.ppSpot; return true; }
+    return false;
+  }
+
+  /* ---------- Bottle detail ---------- */
+  function openBottle(id) {
+    const sh = sheet({ cls: "bottle-sheet" });
+    const off = Core.on(render); sh.onClose(off);
+    function render() {
+      const b = Core.bottle(id); if (!b) { sh.close(); return; }
+      sh.setTitle(b.name);
+      const rows = Core.stockFor(id); const total = Core.totalFor(id);
+      sh.body.innerHTML = `
+        <div class="bd-head">${tagsHtml(b)}<div class="bd-total"><b>${total}</b><span>on hand</span></div></div>
+        ${b.barcode ? `<div class="bd-meta">Barcode ${esc(b.barcode)}</div>` : ""}
+        ${b.notes ? `<div class="bd-notes">${esc(b.notes)}</div>` : ""}
+        <h3 class="sec">Where it is</h3>
+        ${rows.length ? `<ul class="where">${rows.map((r) => `
+          <li class="where-row">
+            <div class="where-place">${placeHtml(r.locId, r.spotId)}</div>
+            <div class="where-ctrl">
+              <button type="button" class="round" data-act="dec" data-row="${r.id}" aria-label="Remove one from ${esc(Core.placeName(r.locId, r.spotId))}">−</button>
+              <span class="where-n">${r.count}</span>
+              <button type="button" class="round" data-act="inc" data-row="${r.id}" aria-label="Add one at ${esc(Core.placeName(r.locId, r.spotId))}">+</button>
+              <button type="button" class="btn small" data-act="move" data-row="${r.id}">Move</button>
+            </div>
+          </li>`).join("")}</ul>` : `<p class="muted">None on hand right now.</p>`}
+        <button type="button" class="btn ghost wide" data-act="add-stock">Add bottles to a spot</button>
+        <div class="bd-foot">
+          <button type="button" class="link" data-act="edit">Edit details</button>
+          <button type="button" class="link danger" data-act="delete">Delete bottle</button>
+        </div>`;
+    }
+    sh.body.addEventListener("click", (e) => {
+      const t = e.target.closest("[data-act]"); if (!t) return;
+      const b = Core.bottle(id); if (!b) return;
+      const row = t.dataset.row ? Core.state().stock.find((r) => r.id === t.dataset.row) : null;
+      const act = t.dataset.act;
+      if (act === "inc" || act === "dec") {
+        const d = act === "inc" ? 1 : -1;
+        Core.changeCount(id, row.locId, row.spotId, d);
+        toast(`${d > 0 ? "+1" : "−1"} at ${Core.placeName(row.locId, row.spotId)}`, { undo: true });
+      }
+      if (act === "move") openMove(id, { locId: row.locId, spotId: row.spotId });
+      if (act === "add-stock") openAddStock(id);
+      if (act === "edit") openBottleForm({ id });
+      if (act === "delete") confirmSheet({ title: "Delete this bottle?", text: `${Core.fullName(b)} and its ${Core.totalFor(id)} on-hand count will be removed. You can undo right after.`, ok: "Delete bottle", danger: true, onOk: () => { Core.deleteBottle(id); toast("Bottle deleted", { undo: true }); } });
+    });
+    render();
+    return sh;
+  }
+
+  /* ---------- Move ---------- */
+  function openMove(bottleId, from, { onDone } = {}) {
+    const b = Core.bottle(bottleId); if (!b) return;
+    const rows = Core.stockFor(bottleId);
+    if (!rows.length) { toast("None on hand to move"); return; }
+    let fromRow = from ? rows.find((r) => r.locId === from.locId && (r.spotId || "") === (from.spotId || "")) : (rows.length === 1 ? rows[0] : null);
+    const pp = { locId: "", spotId: "" };
+    let qty = 1;
+    const sh = sheet({ title: `Move ${b.name}`, cls: "move-sheet" });
+    function render() {
+      const max = fromRow ? fromRow.count : 1;
+      qty = Math.min(qty, max);
+      const same = fromRow && pp.locId === fromRow.locId && (pp.spotId || "") === (fromRow.spotId || "");
+      const ready = fromRow && pp.locId && !same;
+      sh.body.innerHTML = `
+        ${tagsHtml(b, { proof: false })}
+        <h3 class="sec">From</h3>
+        ${rows.length > 1 || !fromRow ? `<div class="chips col">${rows.map((r) => `<button type="button" class="chip place${fromRow && fromRow.id === r.id ? " on" : ""}" data-from="${r.id}">${placeHtml(r.locId, r.spotId)}<b>${r.count}</b></button>`).join("")}</div>`
+          : `<div class="from-one">${placeHtml(fromRow.locId, fromRow.spotId)}<b>${fromRow.count} here</b></div>`}
+        ${fromRow ? `<h3 class="sec">How many</h3><div class="qty-row">${stepperHtml(qty, { min: 1, max })}${max > 1 ? `<button type="button" class="btn small ghost" data-all>All ${max}</button>` : ""}</div>` : ""}
+        <h3 class="sec">To</h3>
+        <div class="pp-host">${placePickerHtml(pp, { exclude: fromRow })}</div>
+        <div class="actions sticky"><button type="button" class="btn primary wide" data-go ${ready ? "" : "disabled"}>${ready ? `Move ${plural(qty, "bottle")} to ${esc(Core.placeName(pp.locId, pp.spotId))}` : same ? "Pick a different spot" : "Pick where they're going"}</button></div>`;
+    }
+    sh.body.addEventListener("click", (e) => {
+      if (handlePlaceClick(e, pp)) return render();
+      const fr = e.target.closest("[data-from]");
+      if (fr) { fromRow = rows.find((r) => r.id === fr.dataset.from); qty = 1; return render(); }
+      if (e.target.closest("[data-all]")) { qty = fromRow.count; return render(); }
+      if (e.target.closest("[data-go]")) {
+        const n = Core.move(bottleId, fromRow, pp, qty);
+        if (n) { toast(`Moved ${n} to ${Core.placeName(pp.locId, pp.spotId)}`, { undo: true }); sh.close(); onDone && onDone(); }
+      }
+    });
+    wireStepper(sh.body, (v) => { qty = v; const btn = $("[data-go]", sh.body); if (btn && !btn.disabled) btn.textContent = `Move ${plural(qty, "bottle")} to ${Core.placeName(pp.locId, pp.spotId)}`; });
+    render();
+    return sh;
+  }
+
+  /* ---------- Add stock to an existing bottle ---------- */
+  function openAddStock(bottleId, place) {
+    const b = Core.bottle(bottleId); if (!b) return;
+    const pp = { locId: place ? place.locId : "", spotId: place ? place.spotId || "" : "" };
+    let n = 1;
+    const sh = sheet({ title: `Add ${b.name}`, cls: "small" });
+    function render() {
+      sh.body.innerHTML = `${tagsHtml(b, { proof: false })}
+        <h3 class="sec">How many</h3>${stepperHtml(n, { min: 1 })}
+        <h3 class="sec">Where</h3><div class="pp-host">${placePickerHtml(pp)}</div>
+        <div class="actions sticky"><button type="button" class="btn primary wide" data-go ${pp.locId ? "" : "disabled"}>${pp.locId ? `Add ${plural(n, "bottle")} to ${esc(Core.placeName(pp.locId, pp.spotId))}` : "Pick where they are"}</button></div>`;
+    }
+    sh.body.addEventListener("click", (e) => {
+      if (handlePlaceClick(e, pp)) return render();
+      if (e.target.closest("[data-go]")) { Core.changeCount(bottleId, pp.locId, pp.spotId, n); toast(`Added ${n} to ${Core.placeName(pp.locId, pp.spotId)}`, { undo: true }); sh.close(); }
+    });
+    wireStepper(sh.body, (v) => { n = v; const btn = $("[data-go]", sh.body); if (btn && !btn.disabled) btn.textContent = `Add ${plural(n, "bottle")} to ${Core.placeName(pp.locId, pp.spotId)}`; });
+    render();
+  }
+
+  /* ---------- New / edit bottle ---------- */
+  function openBottleForm({ id, prefill = {}, place, onSaved } = {}) {
+    const editing = id ? Core.bottle(id) : null;
+    const f = editing ? { ...editing } : { name: "", type: "", finish: "", finishMonths: "", proof: "", barrel: "", barcode: "", notes: "", ...prefill };
+    const pp = { locId: place ? place.locId : "", spotId: place ? place.spotId || "" : "" };
+    let count = 1;
+    const sh = sheet({ title: editing ? "Edit bottle" : "New bottle", cls: "form-sheet" });
+    const names = [...new Set(Core.state().bottles.map((b) => b.name))].sort();
+    const listChips = (key, opts, val) => opts.map((o) => `<button type="button" class="chip${Core.norm(o) === Core.norm(val) ? " on" : ""}" data-fill="${key}" data-val="${esc(o)}">${esc(o)}</button>`).join("");
+    sh.body.innerHTML = `
+      <form class="bform" novalidate>
+        <label class="field"><span>Bottle name</span><input name="name" value="${esc(f.name)}" placeholder="e.g. Founder's Reserve" autocomplete="off" /></label>
+        <div class="chips sugg" data-sugg></div>
+        <label class="field"><span>Type</span><input name="type" value="${esc(f.type)}" placeholder="Pick or type" autocomplete="off" /></label>
+        <div class="chips" data-list="type"></div>
+        <label class="field"><span>Finish</span><input name="finish" value="${esc(f.finish)}" placeholder="Leave blank for no finish" autocomplete="off" /></label>
+        <div class="chips" data-list="finish"></div>
+        <div class="field-row">
+          <label class="field"><span>Finish time (months)</span><input name="finishMonths" type="number" inputmode="decimal" min="0" step="0.5" value="${esc(f.finishMonths)}" /></label>
+          <label class="field"><span>Proof</span><input name="proof" type="number" inputmode="decimal" min="0" step="0.1" value="${esc(f.proof)}" /></label>
+        </div>
+        <div class="field-row">
+          <label class="field"><span>Barrel number</span><input name="barrel" value="${esc(f.barrel)}" autocomplete="off" /></label>
+          <label class="field"><span>Barcode</span><span class="with-btn"><input name="barcode" value="${esc(f.barcode)}" inputmode="numeric" autocomplete="off" /><button type="button" class="icon-btn" data-scan-code aria-label="Scan barcode">${ICON.scan}</button></span></label>
+        </div>
+        <label class="field"><span>Notes</span><textarea name="notes" rows="2">${esc(f.notes)}</textarea></label>
+        ${editing ? "" : `<h3 class="sec">Where is it?</h3><div class="pp-host"></div><h3 class="sec">How many</h3>${stepperHtml(count, { min: 0 })}`}
+        <p class="form-err" role="alert"></p>
+        <div class="actions sticky"><button type="button" class="btn ghost" data-close>Cancel</button><button type="submit" class="btn primary">${editing ? "Save changes" : "Add bottle"}</button></div>
+      </form>`;
+    const form = $("form", sh.body);
+    const ppHost = $(".pp-host", sh.body);
+    const renderPP = () => { if (ppHost) ppHost.innerHTML = placePickerHtml(pp); };
+    renderPP();
+    const sugg = $("[data-sugg]", sh.body);
+    const renderSugg = () => {
+      const q = Core.norm(form.name.value);
+      const list = names.filter((n) => !q || (Core.norm(n).includes(q) && Core.norm(n) !== q)).slice(0, 6);
+      sugg.innerHTML = list.map((n) => `<button type="button" class="chip soft" data-fill="name" data-val="${esc(n)}">${esc(n)}</button>`).join("");
+    };
+    renderSugg();
+    form.name.addEventListener("input", renderSugg);
+    const renderList = (k) => {
+      const all = k === "type" ? Core.typesInUse() : Core.finishesInUse();
+      const val = form[k].value;
+      const exact = all.some((x) => Core.norm(x) === Core.norm(val));
+      const list = Core.rankList(all, exact ? "" : val, k, 8);
+      if (exact && !list.some((x) => Core.norm(x) === Core.norm(val))) list.unshift(all.find((x) => Core.norm(x) === Core.norm(val)));
+      const isNew = val.trim() && !exact && !list.length;
+      $(`[data-list="${k}"]`, sh.body).innerHTML = (k === "finish" ? `<button type="button" class="chip${!val.trim() ? " on" : ""}" data-fill="finish" data-val="">No finish</button>` : "")
+        + listChips(k, list, val)
+        + (all.length > list.length ? `<button type="button" class="chip soft" data-more="${k}">All ${all.length}…</button>` : "")
+        + (isNew ? `<span class="field-hint" style="width:100%;margin:2px 0 0">“${esc(val.trim())}” will be added as a new ${k}.</span>` : "");
+    };
+    ["type", "finish"].forEach((k) => { renderList(k); form[k].addEventListener("input", () => renderList(k)); });
+    sh.body.addEventListener("click", (e) => {
+      if (ppHost && handlePlaceClick(e, pp)) return renderPP();
+      const fill = e.target.closest("[data-fill]");
+      if (fill) {
+        const k = fill.dataset.fill; form[k].value = fill.dataset.val;
+        if (k === "name") {
+          const like = Core.state().bottles.find((b) => b.name === fill.dataset.val);
+          if (like && !form.type.value) form.type.value = like.type;
+          if (like && !form.proof.value) form.proof.value = like.proof;
+          renderSugg();
+        }
+        form[k].dispatchEvent(new Event("input"));
+        return;
+      }
+      const more = e.target.closest("[data-more]");
+      if (more) {
+        const k = more.dataset.more;
+        const all = k === "type" ? Core.typesInUse() : Core.finishesInUse();
+        const use = Core.usage(k);
+        return openListPicker({ title: k === "type" ? "Pick a type" : "Pick a finish", single: true, noun: k === "type" ? "types" : "finishes", countLabel: "bottles",
+          items: all.map((v) => ({ value: v, label: v, count: Math.floor(use.get(v) || 0) })), selected: [form[k].value],
+          onDone: (sel) => { form[k].value = sel[0] || ""; form[k].dispatchEvent(new Event("input")); } });
+      }
+      if (e.target.closest("[data-scan-code]")) openScanner({ title: "Scan this bottle's barcode", onCode: (c) => { form.barcode.value = c; } });
+    });
+    if (!editing) wireStepper(sh.body, (v) => { count = v; });
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const vals = Object.fromEntries(["name", "type", "finish", "finishMonths", "proof", "barrel", "barcode", "notes"].map((k) => [k, form[k].value]));
+      const err = $(".form-err", sh.body);
+      if (!vals.name.trim()) { err.textContent = "Give the bottle a name."; form.name.focus(); return; }
+      if (editing) {
+        const clash = Core.findSame(vals);
+        if (clash && clash.id !== id) { err.textContent = "Another bottle already has this name, type, finish, finish time and barrel."; return; }
+        Core.updateBottle(id, vals); toast("Changes saved", { undo: true }); sh.close(); onSaved && onSaved(id); return;
+      }
+      if (count > 0 && !pp.locId) { err.textContent = "Pick where these bottles are, or set the count to 0."; return; }
+      const r = Core.addBottle(vals, pp.locId ? pp : null, count);
+      toast(r.merged ? `Matched a bottle you already have. Added ${count}.` : "Bottle added", { undo: true });
+      sh.close();
+      onSaved && onSaved(r.id);
+    });
+    if (!editing && !f.name) setTimeout(() => form.name.focus(), 60);
+    return sh;
+  }
+
+  /* ---------- Pick a bottle ---------- */
+  function pickBottle({ title = "Pick a bottle", onPick, note = "", top = false }) {
+    const sh = sheet({ title, top, cls: "pick-sheet" });
+    sh.body.innerHTML = `${note ? `<p class="muted">${esc(note)}</p>` : ""}
+      <div class="search-box"><input type="search" placeholder="Name, type, finish, barrel" aria-label="Search bottles" /></div>
+      <div class="pick-list"></div>`;
+    const inp = $("input", sh.body), list = $(".pick-list", sh.body);
+    const render = () => {
+      const res = Core.filterBottles({ q: inp.value, showEmpty: true }).slice(0, 60);
+      list.innerHTML = res.length ? res.map(({ b, total }) => `<button type="button" class="pick-row" data-pick="${b.id}"><span><b>${esc(b.name)}</b>${tagsHtml(b, { proof: false })}</span><span class="pick-n">${total}</span></button>`).join("") : `<p class="muted">No bottles match.</p>`;
+    };
+    inp.addEventListener("input", render);
+    list.addEventListener("click", (e) => { const p = e.target.closest("[data-pick]"); if (p) { sh.close(); onPick(p.dataset.pick); } });
+    render();
+    return sh;
+  }
+
+  /* ---------- Camera scanner ---------- */
+  const FORMATS = ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "codabar", "itf", "qr_code"];
+  function openScanner({ onCode, continuous = false, title = "Scan a barcode", hint = "Hold the barcode inside the frame" }) {
+    const wrap = document.createElement("div");
+    wrap.className = "scanner";
+    wrap.innerHTML = `
+      <div class="scanner-head"><h2>${esc(title)}</h2><button type="button" class="sheet-x" data-x aria-label="Close scanner">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+      <div class="scanner-view"><video playsinline muted autoplay></video><div class="scanner-frame"></div></div>
+      <p class="scanner-msg">${esc(hint)}</p>
+      <form class="scanner-manual"><input inputmode="numeric" placeholder="Or type the barcode" aria-label="Barcode" autocomplete="off" /><button class="btn primary" type="submit">Look up</button></form>`;
+    document.body.appendChild(wrap);
+    document.documentElement.classList.add("locked");
+    const video = $("video", wrap), msg = $(".scanner-msg", wrap);
+    let stream = null, raf = null, zx = null, alive = true, last = { c: null, t: 0 }, paused = false;
+    function stop() {
+      alive = false;
+      if (raf) cancelAnimationFrame(raf);
+      if (stream) stream.getTracks().forEach((t) => t.stop());
+      if (zx) { try { zx.stop(); } catch (e) {} }
+    }
+    function close() { stop(); wrap.remove(); if (!openSheets.length) document.documentElement.classList.remove("locked"); }
+    function hit(code) {
+      code = String(code || "").trim(); if (!code || paused) return;
+      const now = Date.now();
+      if (last.c === code && now - last.t < 1800) return;
+      last = { c: code, t: now };
+      beep();
+      if (navigator.vibrate) navigator.vibrate(40);
+      if (continuous) { msg.textContent = `Scanned ${code}`; wrap.classList.add("flash"); setTimeout(() => wrap.classList.remove("flash"), 300); onCode(code, ctl); }
+      else { close(); onCode(code); }
+    }
+    const ctl = { close, pause() { paused = true; }, resume() { paused = false; }, say(t) { msg.textContent = t; } };
+    $("[data-x]", wrap).addEventListener("click", close);
+    $("form", wrap).addEventListener("submit", (e) => { e.preventDefault(); const i = $("input", wrap); const v = i.value; i.value = ""; last = { c: null, t: 0 }; hit(v); });
+    const fail = () => { if (alive) { msg.textContent = "The camera isn't available. It needs camera permission and an https:// web address. You can type the barcode below."; wrap.classList.add("no-cam"); } };
+    (async () => {
+      try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return fail();
+        if ("BarcodeDetector" in window) {
+          const det = new window.BarcodeDetector({ formats: FORMATS });
+          try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } } }); }
+          catch (e) { stream = await navigator.mediaDevices.getUserMedia({ video: true }); }
+          if (!alive) return stop();
+          video.srcObject = stream; await video.play().catch(() => {});
+          const loop = () => {
+            if (!alive) return;
+            if (video.readyState < 2) { raf = requestAnimationFrame(loop); return; }
+            det.detect(video).then((c) => { if (c && c.length) hit(c[0].rawValue); }).catch(() => {}).finally(() => { if (alive) raf = requestAnimationFrame(loop); });
+          };
+          raf = requestAnimationFrame(loop);
+        } else if (typeof ZXingBrowser !== "undefined") {
+          const reader = new ZXingBrowser.BrowserMultiFormatReader();
+          zx = await reader.decodeFromConstraints({ video: { facingMode: "environment" } }, video, (r) => { if (r) hit(r.getText()); });
+          if (!alive) stop();
+        } else fail();
+      } catch (e) { fail(); }
+    })();
+    return ctl;
+  }
+  function beep() {
+    try {
+      const C = window.AudioContext || window.webkitAudioContext; const ctx = new C();
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.frequency.value = 880; g.gain.setValueAtTime(0.001, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime + 0.01); g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+      o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime + 0.13);
+    } catch (e) {}
+  }
+
+  /* ---------- Scan to find ---------- */
+  function scanLookup(code) {
+    const hits = Core.byBarcode(code);
+    if (hits.length === 1) return openBottle(hits[0].id);
+    const sh = sheet({ title: `Barcode ${code}` });
+    if (hits.length) {
+      const res = hits.map((b) => ({ b, rows: Core.stockFor(b.id), total: Core.totalFor(b.id) }));
+      sh.body.innerHTML = `<p class="lead">This barcode is on ${hits.length} bottles. Pick the one you're holding.</p>
+        <div class="card-list">${res.map((r) => bottleCard(r)).join("")}</div>
+        <button type="button" class="btn ghost wide" data-new>Add another finish or barrel with this barcode</button>`;
+      $("[data-new]", sh.body).addEventListener("click", () => {
+        const b = hits[0]; sh.close();
+        openBottleForm({ prefill: { barcode: code, name: b.name, type: b.type, proof: b.proof } });
+      });
+      sh.body.addEventListener("click", (e) => { if (e.target.closest("[data-open]")) sh.close(); });
+    } else {
+      sh.body.innerHTML = `<p class="lead">No bottle has this barcode yet.</p>
+        <div class="actions col"><button type="button" class="btn primary wide" data-new>Add a new bottle</button>
+        <button type="button" class="btn ghost wide" data-attach>Add this barcode to a bottle you have</button></div>`;
+      $("[data-new]", sh.body).addEventListener("click", () => { sh.close(); openBottleForm({ prefill: { barcode: code } }); });
+      $("[data-attach]", sh.body).addEventListener("click", () => {
+        sh.close();
+        pickBottle({ title: "Which bottle has this barcode?", onPick: (id) => {
+          const b = Core.bottle(id); Core.updateBottle(id, { ...b, barcode: code }); toast(`Barcode added to ${b.name}`, { undo: true }); openBottle(id);
+        } });
+      });
+    }
+  }
+  const scanToFind = () => openScanner({ title: "Scan to find a bottle", onCode: scanLookup });
+
+  /* ---------- Count check ---------- */
+  function openCountCheck(preset = {}) {
+    const st = { step: "pick", locId: preset.locId || "", spotId: preset.spotId === undefined ? null : preset.spotId, rows: [] };
+    const sh = sheet({ title: "Count check", cls: "full count-sheet" });
+    const label = () => (st.spotId === null ? (Core.loc(st.locId) || {}).name : Core.placeName(st.locId, st.spotId));
+    function begin() {
+      st.rows = Core.rowsAt(st.locId, st.spotId === null ? undefined : st.spotId).map((r) => ({ bottleId: r.bottleId, locId: r.locId, spotId: r.spotId || "", expected: r.count, found: null }))
+        .sort((a, b) => Core.placeName(a.locId, a.spotId).localeCompare(Core.placeName(b.locId, b.spotId)) || Core.bottle(a.bottleId).name.localeCompare(Core.bottle(b.bottleId).name));
+      st.step = "list"; render();
+    }
+    function render() {
+      const S = Core.state();
+      if (st.step === "pick") {
+        sh.setTitle("Count check");
+        const l = Core.loc(st.locId);
+        sh.body.innerHTML = `<p class="lead">Pick a location or one spot. You'll see what the app expects there, then confirm what's actually on the shelf.</p>
+          <h3 class="sec">Location</h3>
+          <div class="chips">${S.locations.map((x) => `<button type="button" class="chip${x.id === st.locId ? " on" : ""}" data-cl="${x.id}">${esc(x.name)} <small>${Core.totalAt(x.id)}</small></button>`).join("")}</div>
+          ${l ? `<h3 class="sec">Spot</h3><div class="chips">
+            <button type="button" class="chip${st.spotId === null ? " on" : ""}" data-cs="__all">All of ${esc(l.name)}</button>
+            ${l.spots.map((s) => `<button type="button" class="chip${st.spotId === s.id ? " on" : ""}" data-cs="${s.id}">${esc(s.name)} <small>${Core.totalAt(l.id, s.id)}</small></button>`).join("")}
+            ${Core.rowsAt(l.id, "").length ? `<button type="button" class="chip${st.spotId === "" ? " on" : ""}" data-cs="">No spot <small>${Core.totalAt(l.id, "")}</small></button>` : ""}
+          </div>` : ""}
+          <div class="actions sticky"><button type="button" class="btn primary wide" data-begin ${l ? "" : "disabled"}>${l ? `Start counting ${esc(label())}` : "Pick a location"}</button></div>`;
+        return;
+      }
+      if (st.step === "list") {
+        sh.setTitle(`Counting ${label()}`);
+        const done = st.rows.filter((r) => r.found !== null).length;
+        const off = st.rows.filter((r) => r.found !== null && r.found !== r.expected).length;
+        sh.body.innerHTML = `
+          <div class="cc-bar"><div class="cc-prog"><b>${done}</b> of ${st.rows.length} checked${off ? `, <span class="warn">${off} off</span>` : ""}</div>
+            <div class="cc-tools"><button type="button" class="btn small" data-cc-scan>${ICON.scan} Scan</button><button type="button" class="btn small ghost" data-cc-add>Not listed?</button></div></div>
+          <div class="cc-progress"><i style="width:${st.rows.length ? (done / st.rows.length) * 100 : 0}%"></i></div>
+          ${st.rows.length ? `<ul class="cc-list">${st.rows.map((r, i) => {
+            const b = Core.bottle(r.bottleId);
+            const state = r.found === null ? "" : r.found === r.expected ? " ok" : " off";
+            return `<li class="cc-row${state}">
+              <div class="cc-info"><b>${esc(b.name)}</b>${tagsHtml(b, { proof: false })}${st.spotId === null ? `<div class="cc-where">${placeHtml(r.locId, r.spotId)}</div>` : ""}<div class="cc-exp">App says ${r.expected}</div></div>
+              <div class="cc-ctrl">
+                <button type="button" class="round" data-cc="${i}" data-d="-1" aria-label="Found one fewer">−</button>
+                <span class="cc-n" aria-label="Found">${r.found === null ? "?" : r.found}</span>
+                <button type="button" class="round" data-cc="${i}" data-d="1" aria-label="Found one more">+</button>
+                <button type="button" class="round ok-btn${r.found === r.expected ? " on" : ""}" data-cc="${i}" data-d="ok" aria-label="Count is right">✓</button>
+              </div></li>`;
+          }).join("")}</ul>` : `<p class="muted">The app doesn't expect any bottles here. If you find some, tap "Not listed?".</p>`}
+          <div class="actions sticky"><button type="button" class="btn ghost" data-cc-back>Change spot</button><button type="button" class="btn primary" data-cc-review>Review</button></div>`;
+        return;
+      }
+      if (st.step === "review") {
+        sh.setTitle(`Review ${label()}`);
+        const fixes = st.rows.filter((r) => r.found !== null && r.found !== r.expected);
+        const unchecked = st.rows.filter((r) => r.found === null).length;
+        sh.body.innerHTML = `
+          ${fixes.length ? `<p class="lead">${plural(fixes.length, "count")} to fix:</p>
+            <ul class="fix-list">${fixes.map((r) => { const b = Core.bottle(r.bottleId); return `<li><span><b>${esc(b.name)}</b> <span class="muted">${esc([b.type, Core.finishText(b), b.barrel ? "Barrel " + b.barrel : ""].filter(Boolean).join(", "))}</span>${st.spotId === null ? `<br><small>${esc(Core.placeName(r.locId, r.spotId))}</small>` : ""}</span><span class="fix-n">${r.expected} → <b>${r.found}</b></span></li>`; }).join("")}</ul>`
+            : `<p class="lead">Everything you checked matches.</p>`}
+          ${unchecked ? `<p class="muted">${plural(unchecked, "bottle")} not checked. Those counts stay as they are.</p>` : ""}
+          <div class="actions sticky"><button type="button" class="btn ghost" data-cc-list>Back to list</button><button type="button" class="btn primary" data-cc-apply>${fixes.length ? `Fix ${plural(fixes.length, "count")}` : "Finish"}</button></div>`;
+      }
+    }
+    function bump(i, d) {
+      const r = st.rows[i];
+      if (d === "ok") r.found = r.expected;
+      else if (r.found === null) r.found = Math.max(0, r.expected + +d);
+      else r.found = Math.max(0, r.found + +d);
+      render();
+    }
+    function addFound(bottleId, spotId) {
+      const exist = st.rows.findIndex((r) => r.bottleId === bottleId && r.spotId === spotId);
+      if (exist >= 0) { const r = st.rows[exist]; r.found = (r.found === null ? 0 : r.found) + 1; }
+      else st.rows.push({ bottleId, locId: st.locId, spotId, expected: 0, found: 1 });
+      render();
+    }
+    function onScan(code, ctl) {
+      const idx = st.rows.map((r, i) => [r, i]).filter(([r]) => Core.norm(Core.bottle(r.bottleId).barcode) === Core.norm(code));
+      const bump1 = (i) => { const r = st.rows[i]; r.found = (r.found === null ? 0 : r.found) + 1; render(); const b = Core.bottle(r.bottleId); ctl.say(`${b.name}, ${Core.finishText(b)}: ${r.found} counted`); };
+      if (idx.length === 1) return bump1(idx[0][1]);
+      if (idx.length > 1) {
+        ctl.pause();
+        const ch = sheet({ title: "Which one is it?", top: true, cls: "small" });
+        ch.body.innerHTML = idx.map(([r, i]) => { const b = Core.bottle(r.bottleId); return `<button type="button" class="pick-row" data-i="${i}"><span><b>${esc(b.name)}</b>${tagsHtml(b, { proof: false })}</span></button>`; }).join("");
+        ch.onClose(() => ctl.resume());
+        ch.body.addEventListener("click", (e) => { const p = e.target.closest("[data-i]"); if (p) { ch.close(); bump1(+p.dataset.i); } });
+        return;
+      }
+      const known = Core.byBarcode(code);
+      if (known.length === 1) { addFound(known[0].id, st.spotId === null ? "" : st.spotId); ctl.say(`${known[0].name} wasn't expected here. Added as found.`); return; }
+      ctl.say(known.length ? "That barcode fits several finishes. Close the scanner and use “Not listed?”." : `No bottle has barcode ${code}.`);
+    }
+    sh.body.addEventListener("click", (e) => {
+      const t = e.target;
+      const cl = t.closest("[data-cl]"); if (cl) { st.locId = cl.dataset.cl; st.spotId = null; return render(); }
+      const cs = t.closest("[data-cs]"); if (cs) { st.spotId = cs.dataset.cs === "__all" ? null : cs.dataset.cs; return render(); }
+      if (t.closest("[data-begin]")) return begin();
+      const cc = t.closest("[data-cc]"); if (cc) return bump(+cc.dataset.cc, cc.dataset.d);
+      if (t.closest("[data-cc-scan]")) return openScanner({ title: `Counting ${label()}`, continuous: true, hint: "Scan each bottle as you touch it", onCode: onScan });
+      if (t.closest("[data-cc-add]")) return pickBottle({ title: "Which bottle did you find?", top: true, onPick: (id) => addFound(id, st.spotId === null ? "" : st.spotId) });
+      if (t.closest("[data-cc-back]")) { st.step = "pick"; return render(); }
+      if (t.closest("[data-cc-review]")) { st.step = "review"; return render(); }
+      if (t.closest("[data-cc-list]")) { st.step = "list"; return render(); }
+      if (t.closest("[data-cc-apply]")) {
+        const n = Core.applyCountCheck(label(), st.rows);
+        toast(n ? `Fixed ${plural(n, "count")}` : "Count check saved", { undo: !!n });
+        sh.close();
+      }
+    });
+    if (st.locId && preset.start) begin(); else render();
+    return sh;
+  }
+
+  /* ---------- Import / export ---------- */
+  function doExport() {
+    try { Core.exportXlsx(); toast("Exported to Excel"); } catch (e) { toast(e.message); }
+  }
+  function startImport() {
+    const inp = document.createElement("input");
+    inp.type = "file"; inp.accept = ".xlsx,.xls,.csv"; inp.style.display = "none";
+    document.body.appendChild(inp);
+    inp.addEventListener("change", async () => {
+      const file = inp.files[0]; inp.remove(); if (!file) return;
+      let rows;
+      try { rows = await Core.parseFile(file); }
+      catch (e) { toast(e.message && e.message.includes("Excel tool") ? e.message : "That file couldn't be read. Use .xlsx, .xls or .csv."); return; }
+      if (!rows.length) { toast("That sheet has no rows."); return; }
+      const plan = Core.planImport(rows);
+      if (!plan.merged.length && !plan.created.length) {
+        const sh = sheet({ title: "Nothing to import", cls: "small" });
+        sh.body.innerHTML = `<p class="lead">No rows could be used. The sheet needs a Name or Barcode column, plus Count and Location.</p>${plan.skipped.length ? `<ul class="imp-list">${plan.skipped.slice(0, 8).map((s) => `<li>${esc(s)}</li>`).join("")}</ul>` : ""}<div class="actions"><button class="btn primary wide" data-close>OK</button></div>`;
+        return;
+      }
+      const sh = sheet({ title: "Import preview", cls: "small" });
+      const sect = (label, list) => (list.length ? `<details><summary>${esc(label)} (${list.length})</summary><ul class="imp-list">${list.slice(0, 200).map((s) => `<li>${esc(s)}</li>`).join("")}</ul></details>` : "");
+      sh.body.innerHTML = `<p class="muted imp-file">${esc(file.name)}</p>
+        <div class="imp-stats">
+          <div><b>${plan.merged.length}</b><span>added to bottles you have</span></div>
+          <div><b>${plan.newCount}</b><span>${plan.newCount === 1 ? "new bottle" : "new bottles"}</span></div>
+          ${plan.skipped.length ? `<div><b>${plan.skipped.length}</b><span>skipped</span></div>` : ""}
+        </div>
+        <p class="muted">Counts are added to what's already here.</p>
+        ${sect("Added to existing", plan.merged)}${sect("New bottles, by spot", plan.created)}${sect("Skipped", plan.skipped)}
+        <div class="actions sticky"><button type="button" class="btn ghost" data-close>Cancel</button><button type="button" class="btn primary" data-apply>Import</button></div>`;
+      $("[data-apply]", sh.body).addEventListener("click", () => { Core.applyImport(plan, file.name); sh.close(); toast(`Imported ${file.name}`, { undo: true }); });
+    });
+    inp.click();
+  }
+  function backupBannerHtml() {
+    const s = Core.backupStatus();
+    if (!Core.isStorageOk()) return `<div class="banner bad">Changes aren't saving on this device. Storage may be full or blocked.</div>`;
+    if (!s.due) return "";
+    return `<div class="banner"><span>${s.never ? "Your inventory hasn't been backed up yet." : `Last Excel backup was ${plural(s.days, "day")} ago.`}</span><button type="button" class="btn small" data-act="backup-now">Export now</button></div>`;
+  }
+
+  /* ---------- Filter sheet ---------- */
+  function openFilterSheet(filters, onApply) {
+    const f = { types: [...(filters.types || [])], finishes: [...(filters.finishes || [])], locs: [...(filters.locs || [])] };
+    const sh = sheet({ title: "Filter bottles", cls: "filter-sheet" });
+    const chip = (group, val, label) => `<button type="button" class="chip${f[group].includes(val) ? " on" : ""}" data-g="${group}" data-v="${esc(val)}" aria-pressed="${f[group].includes(val)}">${esc(label)}</button>`;
+    const topChips = (group, field) => {
+      const counts = Core.facetCounts(field, { ...filters, ...f });
+      const ranked = [...counts.entries()].filter(([v, n]) => n > 0).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([v]) => v);
+      const show = [...new Set([...f[group], ...ranked.slice(0, 10)])];
+      return show.map((v) => chip(group, v, v || "No finish")).join("") + (ranked.length > show.length ? `<button type="button" class="chip soft" data-all="${group}">All ${ranked.length}…</button>` : "");
+    };
+    function render() {
+      const n = Core.filterBottles({ ...filters, ...f }).length;
+      sh.body.innerHTML = `
+        <h3 class="sec">Type</h3><div class="chips">${topChips("types", "type")}</div>
+        <h3 class="sec">Finish</h3><div class="chips">${topChips("finishes", "finish")}</div>
+        <h3 class="sec">Location</h3><div class="chips">${Core.state().locations.map((l) => chip("locs", l.id, l.name)).join("")}</div>
+        <div class="actions sticky"><button type="button" class="btn ghost" data-clear>Clear</button><button type="button" class="btn primary" data-apply>Show ${plural(n, "bottle")}</button></div>`;
+    }
+    sh.body.addEventListener("click", (e) => {
+      const c = e.target.closest("[data-g]");
+      if (c) { const a = f[c.dataset.g]; const v = c.dataset.v; const i = a.indexOf(v); i >= 0 ? a.splice(i, 1) : a.push(v); return render(); }
+      if (e.target.closest("[data-clear]")) { f.types = []; f.finishes = []; f.locs = []; return render(); }
+      if (e.target.closest("[data-apply]")) { onApply(f); sh.close(); }
+      const all = e.target.closest("[data-all]");
+      if (all) {
+        const g = all.dataset.all, field = g === "types" ? "type" : "finish";
+        const counts = Core.facetCounts(field, { ...filters, ...f });
+        const vals = field === "type" ? Core.typesInUse() : ["", ...Core.finishesInUse()];
+        openListPicker({ title: field === "type" ? "Types" : "Finishes", noun: g, items: vals.map((v) => ({ value: v, label: v || "No finish", count: counts.get(v) || 0 })), selected: f[g], onDone: (sel) => { f[g] = sel; render(); } });
+      }
+    });
+    render();
+  }
+
+
+  /* ---------- Long-list picker (types / finishes) ---------- */
+  function openListPicker({ title, items, selected = [], onDone, single = false, noun = "items", countLabel = "on hand", allowZero = true }) {
+    const sel = new Set(selected.filter((x) => x !== undefined && x !== null));
+    let q = "", sort = "count", showZero = false;
+    const sh = sheet({ title, top: true, cls: "picker-sheet" });
+    sh.body.innerHTML = `<div class="search-box picker-search"><input type="search" placeholder="Type to narrow ${esc(noun)}" aria-label="Search ${esc(noun)}" autocomplete="off" /></div>
+      <div class="picker-tools"><span class="picker-n"></span><span><button type="button" class="link" data-sort>A–Z</button></span></div>
+      <div class="picker-sel chips"></div>
+      <ul class="picker-list"></ul>
+      ${single ? "" : `<div class="actions sticky"><button type="button" class="btn ghost" data-clear>Clear</button><button type="button" class="btn primary" data-done>Done</button></div>`}`;
+    const inp = $("input", sh.body), list = $(".picker-list", sh.body);
+    function render() {
+      const n = Core.norm(q);
+      let rows = items.filter((it) => !n || Core.norm(it.label).includes(n));
+      const hidden = rows.filter((it) => !it.count && !sel.has(it.value)).length;
+      if (!showZero && !n) rows = rows.filter((it) => it.count || sel.has(it.value));
+      rows.sort((a, b) => (n ? Core.norm(b.label).startsWith(n) - Core.norm(a.label).startsWith(n) : 0) || (sort === "count" ? b.count - a.count : 0) || a.label.localeCompare(b.label));
+      $(".picker-n", sh.body).textContent = `${rows.length} of ${items.length} ${noun}`;
+      $("[data-sort]", sh.body).textContent = sort === "count" ? "Sort A–Z" : "Sort by most";
+      $(".picker-sel", sh.body).innerHTML = single ? "" : [...sel].map((v) => { const it = items.find((x) => x.value === v); return `<button type="button" class="chip on" data-pv="${esc(v)}">${esc(it ? it.label : v || "No finish")} ×</button>`; }).join("");
+      list.innerHTML = rows.slice(0, 300).map((it) => `<li><button type="button" class="picker-row${sel.has(it.value) ? " on" : ""}" data-pv="${esc(it.value)}" aria-pressed="${sel.has(it.value)}">
+          <span class="picker-check" aria-hidden="true">${sel.has(it.value) ? "✓" : ""}</span><span class="picker-label">${esc(it.label)}</span><span class="picker-count">${it.count || ""}</span></button></li>`).join("")
+        + (!n && !showZero && hidden && allowZero ? `<li><button type="button" class="link" data-zero>Show ${hidden} with none on hand</button></li>` : "")
+        + (!rows.length ? `<li class="muted" style="padding:12px 0">No ${esc(noun)} match “${esc(q)}”.</li>` : "");
+    }
+    inp.addEventListener("input", () => { q = inp.value; render(); });
+    sh.body.addEventListener("click", (e) => {
+      const p = e.target.closest("[data-pv]");
+      if (p) {
+        const v = p.dataset.pv;
+        if (single) { sh.close(); onDone([v]); return; }
+        sel.has(v) ? sel.delete(v) : sel.add(v);
+        return render();
+      }
+      if (e.target.closest("[data-sort]")) { sort = sort === "count" ? "az" : "count"; return render(); }
+      if (e.target.closest("[data-zero]")) { showZero = true; return render(); }
+      if (e.target.closest("[data-clear]")) { sel.clear(); return render(); }
+      if (e.target.closest("[data-done]")) { sh.close(); onDone([...sel]); }
+    });
+    render();
+    setTimeout(() => inp.focus(), 80);
+    return sh;
+  }
+
+  /* ---------- Settings ---------- */
+  function mountSettings(root, { extra = "" } = {}) {
+    let editing = null; // "loc:<id>" | "spot:<loc>:<id>"
+    const listQ = { types: "", finishes: "" }, listAll = { types: false, finishes: false };
+    const listHtml = (k) => {
+      const S = Core.state(); const n = Core.norm(listQ[k]);
+      const vals = [...S[k]].sort((a, b) => a.localeCompare(b)).filter((v) => !n || Core.norm(v).includes(n));
+      const cap = n || listAll[k] ? vals.length : 30;
+      return vals.slice(0, cap).map((v) => `<span class="chip removable">${esc(v)}<button type="button" data-s="rm-${k}" data-v="${esc(v)}" aria-label="Remove ${esc(v)}">×</button></span>`).join("")
+        + (vals.length > cap ? `<button type="button" class="chip soft" data-s="all-${k}">Show all ${vals.length}</button>` : "")
+        + (n && !vals.length ? `<span class="muted">None match.</span>` : "");
+    };
+    function render() {
+      const S = Core.state();
+      const bs = Core.backupStatus();
+      root.innerHTML = `<div class="settings">
+        ${S.demo ? `<section class="set-card demo"><h3>You're looking at sample bottles</h3><p class="muted">Try anything. When you're ready, clear them and keep your 4 locations.</p><button type="button" class="btn" data-s="clear-sample">Clear sample bottles</button></section>` : ""}
+        <section class="set-card"><h3>Excel</h3>
+          <p class="muted">${bs.never ? "Never exported." : `Last export ${bs.days === 0 ? "today" : plural(bs.days, "day") + " ago"}.`} Your inventory lives only on this phone, so export regularly.</p>
+          <div class="actions"><button type="button" class="btn primary" data-s="export">Export to Excel</button><button type="button" class="btn ghost" data-s="import">Import Excel</button></div>
+          <p class="field-hint">Importing adds to matching bottles: same name, type, finish, finish time and barrel, in the same spot. 2 here + 4 in the sheet = 6.</p>
+        </section>
+        <section class="set-card"><h3>Locations and spots</h3>
+          ${S.locations.map((l, li) => `<div class="loc-block">
+            <div class="loc-line">
+              ${editing === "loc:" + l.id ? `<form class="inline-edit" data-form="loc" data-id="${l.id}"><input value="${esc(l.name)}" aria-label="Location name" /><button class="btn small primary">Save</button></form>`
+                : `<b>${esc(l.name)}</b><span class="muted">${Core.totalAt(l.id)} bottles</span>
+                <span class="loc-tools">
+                  <button type="button" class="icon-btn" data-s="up" data-id="${l.id}" aria-label="Move ${esc(l.name)} up" ${li === 0 ? "disabled" : ""}>↑</button>
+                  <button type="button" class="icon-btn" data-s="down" data-id="${l.id}" aria-label="Move ${esc(l.name)} down" ${li === S.locations.length - 1 ? "disabled" : ""}>↓</button>
+                  <button type="button" class="link" data-s="edit-loc" data-id="${l.id}">Rename</button>
+                  <button type="button" class="link danger" data-s="rm-loc" data-id="${l.id}">Remove</button></span>`}
+            </div>
+            <ul class="spot-list">${l.spots.map((s) => `<li>${editing === `spot:${l.id}:${s.id}` ? `<form class="inline-edit" data-form="spot" data-loc="${l.id}" data-id="${s.id}"><input value="${esc(s.name)}" aria-label="Spot name" /><button class="btn small primary">Save</button></form>`
+              : `<span>${esc(s.name)} <span class="muted">${Core.totalAt(l.id, s.id)}</span></span><span><button type="button" class="link" data-s="edit-spot" data-loc="${l.id}" data-id="${s.id}">Rename</button><button type="button" class="link danger" data-s="rm-spot" data-loc="${l.id}" data-id="${s.id}">Remove</button></span>`}</li>`).join("")}</ul>
+            <form class="add-line" data-form="add-spot" data-loc="${l.id}"><input placeholder="Add a spot in ${esc(l.name)}" aria-label="New spot in ${esc(l.name)}" /><button class="btn small">Add</button></form>
+          </div>`).join("")}
+          <form class="add-line" data-form="add-loc"><input placeholder="Add a location" aria-label="New location" /><button class="btn small">Add</button></form>
+        </section>
+        ${["types", "finishes"].map((k) => `<section class="set-card"><h3>${k === "types" ? "Whiskey types" : "Finishes"} <span class="muted" style="font-size:14px">${S[k].length}</span></h3>
+          ${S[k].length > 20 ? `<div class="search-box"><input type="search" data-listq="${k}" value="${esc(listQ[k])}" placeholder="Find a ${k === "types" ? "type" : "finish"}" aria-label="Find in ${k}" /></div>` : ""}
+          <div class="chips" data-listbox="${k}">${listHtml(k)}</div>
+          <form class="add-line" data-form="add-${k}"><input placeholder="Add a ${k === "types" ? "type" : "finish"}" /><button class="btn small">Add</button></form></section>`).join("")}
+        ${extra}
+        <section class="set-card"><h3>Start over</h3><p class="muted">Erase every bottle, spot and history entry on this phone. Export first if you might want it back.</p><button type="button" class="btn danger" data-s="erase">Erase everything</button></section>
+      </div>`;
+      const inp = root.querySelector(".inline-edit input"); if (inp) { inp.focus(); inp.select(); }
+    }
+    root.addEventListener("click", (e) => {
+      const t = e.target.closest("[data-s]"); if (!t) return;
+      const a = t.dataset.s, id = t.dataset.id, lid = t.dataset.loc;
+      if (a === "export") doExport();
+      if (a === "import") startImport();
+      if (a === "clear-sample") confirmSheet({ title: "Clear sample bottles?", text: "All sample bottles, spots and counts will be removed. Landing, Chapel, Office and Library stay.", ok: "Clear them", danger: true, onOk: () => { Core.clearSample(); toast("Sample bottles cleared"); } });
+      if (a === "up" || a === "down") Core.moveLocation(id, a === "up" ? -1 : 1);
+      if (a === "edit-loc") { editing = "loc:" + id; render(); }
+      if (a === "edit-spot") { editing = `spot:${lid}:${id}`; render(); }
+      if (a === "rm-loc") { const r = Core.removeLocation(id); if (r === "not-empty") toast("Move or remove its bottles first"); else toast("Location removed", { undo: true }); }
+      if (a === "rm-spot") {
+        const n = Core.totalAt(lid, id); const l = Core.loc(lid);
+        const go = () => { Core.removeSpot(lid, id); toast("Spot removed", { undo: true }); };
+        if (n) confirmSheet({ title: "Remove this spot?", text: `${Core.placeName(lid, id)} has ${plural(n, "bottle")}. They'll stay in ${l.name} with no spot.`, ok: "Remove spot", danger: true, onOk: go }); else go();
+      }
+      if (a === "rm-types" || a === "rm-finishes") Core.removeListItem(a.slice(3), t.dataset.v);
+      if (a === "all-types" || a === "all-finishes") { const k = a.slice(4); listAll[k] = true; root.querySelector(`[data-listbox="${k}"]`).innerHTML = listHtml(k); }
+      if (a === "erase") confirmSheet({ title: "Erase everything?", text: "This removes every bottle, count, spot and history entry on this phone. It can't be undone.", ok: "Erase everything", danger: true, onOk: () => { Core.eraseAll(); toast("Everything erased"); } });
+    });
+    root.addEventListener("input", (e) => {
+      const li = e.target.closest("[data-listq]"); if (!li) return;
+      const k = li.dataset.listq; listQ[k] = li.value; root.querySelector(`[data-listbox="${k}"]`).innerHTML = listHtml(k);
+    });
+    root.addEventListener("submit", (e) => {
+      const fm = e.target.closest("[data-form]"); if (!fm) return; e.preventDefault();
+      const v = fm.querySelector("input").value; const k = fm.dataset.form;
+      let r;
+      if (k === "loc") { editing = null; Core.renameLocation(fm.dataset.id, v); render(); }
+      if (k === "spot") { editing = null; Core.renameSpot(fm.dataset.loc, fm.dataset.id, v); render(); }
+      if (k === "add-spot") r = Core.addSpot(fm.dataset.loc, v);
+      if (k === "add-loc") r = Core.addLocation(v);
+      if (k === "add-types") r = Core.addListItem("types", v);
+      if (k === "add-finishes") r = Core.addListItem("finishes", v);
+      if (r === "exists") toast("That's already on the list");
+    });
+    const off = Core.on(render);
+    render();
+    return off;
+  }
+
+  /* ---------- History ---------- */
+  function mountHistory(root) {
+    let q = "";
+    root.innerHTML = `<div class="history"><div class="search-box"><input type="search" placeholder="Search history" aria-label="Search history" /></div><div class="hist-body"></div></div>`;
+    const body = root.querySelector(".hist-body");
+    function render() {
+      const list = Core.state().history.filter((h) => !q || Core.norm(h.text).includes(Core.norm(q)));
+      if (!list.length) { body.innerHTML = `<p class="muted">${q ? "Nothing matches." : "Changes you make will show up here."}</p>`; return; }
+      let day = "", out = "";
+      for (const h of list.slice(0, 400)) {
+        const d = new Date(h.t);
+        const dl = d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+        if (dl !== day) { if (day) out += "</ul>"; out += `<h3 class="hist-day">${esc(dl)}</h3><ul class="hist-list">`; day = dl; }
+        out += `<li><time>${d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}</time><span>${esc(h.text)}</span></li>`;
+      }
+      body.innerHTML = out + "</ul>" + (Core.canUndo() ? `<button type="button" class="btn ghost wide" data-hundo>Undo: ${esc(Core.lastUndoLabel())}</button>` : "");
+    }
+    root.querySelector("input").addEventListener("input", (e) => { q = e.target.value; render(); });
+    root.addEventListener("click", (e) => { if (e.target.closest("[data-hundo]")) { Core.undo(); toast("Undone"); } });
+    const off = Core.on(render);
+    render();
+    return off;
+  }
+
+  const ICON = {
+    scan: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 8v8M10 8v8M13 8v8M17 8v8"/></svg>`,
+    search: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>`,
+    move: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13l-3.5-3.5M20 15H7l3.5 3.5"/></svg>`,
+    plus: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>`,
+    check: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
+    filter: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>`,
+    history: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg>`,
+    gear: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>`,
+    building: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M12 3v18M3 12h18"/></svg>`,
+    back: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>`,
+  };
+
+  function registerSW() {
+    if ("serviceWorker" in navigator && location.protocol === "https:") {
+      window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+    }
+  }
+
+  return {
+    esc, plural, sheet, toast, confirmSheet, tagsHtml, placeHtml, bottleCard, stepperHtml, wireStepper,
+    openBottle, openMove, openAddStock, openBottleForm, pickBottle, openScanner, scanLookup, scanToFind,
+    openCountCheck, openListPicker, doExport, startImport, backupBannerHtml, openFilterSheet, mountSettings, mountHistory, ICON, registerSW,
+  };
+})();
+
+</script>
+<script>
+(function () {
+  "use strict";
+  const { esc, plural, ICON } = UI;
+  const top = document.getElementById("top");
+  const main = document.getElementById("main");
+  const tabsEl = document.getElementById("tabs");
+  const fab = document.getElementById("fab");
+  const CHEV = `<svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>`;
+  const PENCIL = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`;
+  const TABS = [
+    { id: "find", label: "Find", icon: ICON.search },
+    { id: "count", label: "Count", icon: ICON.check },
+    { id: "history", label: "History", icon: ICON.history },
+    { id: "settings", label: "Settings", icon: ICON.gear },
+  ];
+  const RAIL_MAX = 8;
+  let tab = "find", setPage = "menu", unmount = null;
+  const f = { q: "", types: [], finishes: [], locs: [], spots: [], barrel: "" };
+
+  fab.innerHTML = `${ICON.plus}<span>New bottle</span>`;
+  fab.addEventListener("click", () => UI.openBottleForm());
+
+  function header(title, { back = false, sum = false } = {}) {
+    top.innerHTML = `<div class="top-left">${back ? `<button type="button" class="back" data-back aria-label="Back to Settings">${ICON.back}</button>` : ""}<h1>${esc(title)}</h1></div>${sum ? `<div class="sum"><b>${Core.totalAll()}</b>on hand</div>` : ""}`;
+  }
+  top.addEventListener("click", (e) => { if (e.target.closest("[data-back]")) { setPage = "menu"; go("settings"); } });
+
+  function renderTabs() {
+    tabsEl.innerHTML = TABS.map((t) => `<button type="button" class="tab" data-tab="${t.id}" ${t.id === tab ? 'aria-current="page"' : ""}>${t.icon}<span>${t.label}</span></button>`).join("");
+  }
+  tabsEl.addEventListener("click", (e) => { const b = e.target.closest("[data-tab]"); if (!b) return; if (b.dataset.tab === "settings") setPage = "menu"; go(b.dataset.tab); });
+
+  function go(next) {
+    tab = next;
+    if (unmount) { unmount(); unmount = null; }
+    renderTabs();
+    fab.style.display = tab === "find" ? "" : "none";
+    main.innerHTML = "";
+    const host = document.createElement("div");
+    main.appendChild(host);
+    window.scrollTo(0, 0);
+    if (tab === "find") mountFind(host);
+    if (tab === "count") mountCount(host);
+    if (tab === "history") { header("History"); unmount = UI.mountHistory(host); }
+    if (tab === "settings") mountSettings(host);
+  }
+
+  /* ================= Find ================= */
+  function mountFind(host) {
+    host.innerHTML = `<div id="banner"></div>
+      <div class="finder">
+        <div class="strip">
+          ${ICON.search}
+          <input id="q" type="search" placeholder="Finish, type, barrel, cabinet…" value="${esc(f.q)}" autocomplete="off" enterkeyhint="search" aria-label="Search bottles" aria-controls="sg" />
+          <button type="button" class="clear-q" id="clearQ" aria-label="Clear search" ${f.q ? "" : "hidden"}>×</button>
+          <button type="button" class="scan-btn" id="scanBtn">${ICON.scan}<span>Scan</span></button>
+        </div>
+        <div class="sg-box" id="sg" role="listbox"></div>
+      </div>
+      <div class="rails" id="rails"></div>
+      <div class="active-row" id="active"></div>
+      <div id="map"></div>
+      <div class="result-line" id="resLine"></div>
+      <div class="card-list" id="results"></div>`;
+    const q = host.querySelector("#q"), sg = host.querySelector("#sg"), clearQ = host.querySelector("#clearQ");
+    const setQ = (v) => { f.q = v; q.value = v; clearQ.hidden = !v; };
+
+    function renderSugg() {
+      const list = document.activeElement === q ? Core.suggest(f.q, { ...f, q: "" }) : [];
+      if (!list.length) { sg.innerHTML = ""; return; }
+      const n = Core.norm(f.q);
+      const hl = (s) => { const i = Core.norm(s).indexOf(n); return i < 0 ? esc(s) : esc(s.slice(0, i)) + "<mark>" + esc(s.slice(i, i + n.length)) + "</mark>" + esc(s.slice(i + n.length)); };
+      const KIND = { finish: "Finish", type: "Type", loc: "Location", spot: "Spot", barrel: "Barrel" };
+      sg.innerHTML = list.map((s) => `<button type="button" class="sg-row" role="option" data-sk="${s.kind}" data-sv="${esc(s.value)}"><span class="kind">${KIND[s.kind]}</span><span class="lbl">${hl(s.label)}</span><span class="cnt">${s.count}</span></button>`).join("")
+        + `<div class="sg-hint">Tap one to filter by it, or keep typing to search everything.</div>`;
+    }
+    function applySugg(kind, value) {
+      const add = (arr) => { if (!arr.includes(value)) arr.push(value); };
+      if (kind === "finish") add(f.finishes);
+      if (kind === "type") add(f.types);
+      if (kind === "loc") add(f.locs);
+      if (kind === "spot") add(f.spots);
+      if (kind === "barrel") f.barrel = value;
+      setQ(""); q.blur(); sg.innerHTML = ""; draw();
+    }
+    q.addEventListener("input", () => { setQ(q.value); renderSugg(); renderRest(); });
+    q.addEventListener("focus", renderSugg);
+    q.addEventListener("blur", () => setTimeout(() => { if (document.activeElement !== q && !sg.contains(document.activeElement)) sg.innerHTML = ""; }, 150));
+    q.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); q.blur(); sg.innerHTML = ""; }
+      if (e.key === "ArrowDown") { const first = sg.querySelector(".sg-row"); if (first) { e.preventDefault(); first.focus(); } }
+    });
+    sg.addEventListener("pointerdown", (e) => { if (e.target.closest(".sg-row")) e.preventDefault(); });
+    sg.addEventListener("click", (e) => { const s = e.target.closest(".sg-row"); if (s) applySugg(s.dataset.sk, s.dataset.sv); });
+    clearQ.addEventListener("click", () => { setQ(""); sg.innerHTML = ""; renderRest(); q.focus(); });
+    host.querySelector("#scanBtn").addEventListener("click", UI.scanToFind);
+
+    host.addEventListener("click", (e) => {
+      const c = e.target.closest("[data-g]");
+      if (c) { const a = f[c.dataset.g]; const i = a.indexOf(c.dataset.v); i >= 0 ? a.splice(i, 1) : a.push(c.dataset.v); return draw(); }
+      const all = e.target.closest("[data-all]"); if (all) return openAll(all.dataset.all);
+      const sp = e.target.closest("[data-spot]"); if (sp) return openSpot(sp.dataset.loc, sp.dataset.spot);
+      const dr = e.target.closest("[data-dimroom]"); if (dr) return openSpot(dr.dataset.dimroom, null);
+      const rm = e.target.closest("[data-rm]");
+      if (rm) { const k = rm.dataset.rm; if (k === "barrel") f.barrel = ""; else f[k].splice(f[k].indexOf(rm.dataset.v), 1); return draw(); }
+      if (e.target.closest("[data-clear-all]")) { setQ(""); f.types = []; f.finishes = []; f.locs = []; f.spots = []; f.barrel = ""; return draw(); }
+      if (e.target.closest("[data-first]")) UI.openBottleForm();
+    });
+
+    function openAll(group) {
+      const field = group === "types" ? "type" : "finish";
+      const counts = Core.facetCounts(field, f);
+      const vals = field === "type" ? Core.typesInUse() : ["", ...Core.finishesInUse()];
+      UI.openListPicker({ title: field === "type" ? "Types" : "Finishes", noun: group,
+        items: vals.map((v) => ({ value: v, label: v || "No finish", count: counts.get(v) || 0 })),
+        selected: f[group], onDone: (sel) => { f[group] = sel; draw(); } });
+    }
+
+    function railChips(group, field) {
+      const counts = Core.facetCounts(field, f);
+      const ranked = [...counts.entries()].filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+      const sel = f[group];
+      const topList = ranked.filter(([v]) => !sel.includes(v)).slice(0, Math.max(0, RAIL_MAX - sel.length));
+      const chip = (v, n, on) => `<button type="button" class="chip${on ? " on" : ""}" data-g="${group}" data-v="${esc(v)}" aria-pressed="${on}">${esc(v || "No finish")} <small>${n}</small></button>`;
+      const total = field === "type" ? Core.typesInUse().length : Core.finishesInUse().length;
+      return sel.map((v) => chip(v, counts.get(v) || 0, true)).join("") + topList.map(([v, n]) => chip(v, n, false)).join("")
+        + (ranked.length > sel.length + topList.length || total > RAIL_MAX ? `<button type="button" class="chip all" data-all="${group}">All ${total}…</button>` : "");
+    }
+
+    function mapHtml() {
+      const S = Core.state();
+      const active = Core.filterActive(f);
+      const sc = Core.spotCounts(f);
+      const lit = [], dim = [];
+      S.locations.forEach((l) => {
+        const keys = [...l.spots.map((s) => l.id + "|" + s.id), l.id + "|"];
+        const n = keys.reduce((m, k) => m + (sc.get(k) || 0), 0);
+        (active && !n ? dim : lit).push({ l, n });
+      });
+      const room = ({ l, n }) => {
+        const loose = sc.get(l.id + "|") || 0;
+        const looseAll = Core.totalAt(l.id, "");
+        const boxes = l.spots.map((s) => {
+          const c = sc.get(l.id + "|" + s.id) || 0;
+          return `<button type="button" class="spot${c ? " has lit" : ""}" data-loc="${l.id}" data-spot="${s.id}" aria-label="${esc(l.name)}, ${esc(s.name)}: ${c}${active ? " matching" : ""}"><span class="sn">${esc(s.name)}</span><span class="sc">${c}</span></button>`;
+        }).join("") + (looseAll || loose ? `<button type="button" class="spot loose${loose ? " has lit" : ""}" data-loc="${l.id}" data-spot="" aria-label="${esc(l.name)}, no spot: ${loose}"><span class="sn">No spot</span><span class="sc">${loose}</span></button>` : "");
+        return `<section class="room" aria-label="${esc(l.name)}"><div class="room-h"><b>${esc(l.name)}</b><span>${n}${active ? `<small>of ${Core.totalAt(l.id)}</small>` : ""}</span></div>
+          ${boxes ? `<div class="spots">${boxes}</div>` : `<div class="room-empty">No spots yet. Add them in Settings › Locations and spots.</div>`}</section>`;
+      };
+      if (!active) {
+        return `<div class="loc-strip" role="group" aria-label="Locations">${S.locations.map((l) => `<button type="button" class="loc-pill" data-dimroom="${l.id}">${esc(l.name)} <b>${Core.totalAt(l.id)}</b></button>`).join("")}</div>`;
+      }
+      return `<div class="map-h"><h2>Where</h2><span>Lit spots have a match</span></div>
+        <div class="map${active ? " filtering" : ""}">${lit.map(room).join("")}</div>
+        ${dim.length ? `<div class="dim-rooms"><span class="lbl">No matches in</span>${dim.map(({ l }) => `<button type="button" class="dim-room" data-dimroom="${l.id}">${esc(l.name)}</button>`).join("")}</div>` : ""}
+        ${active && !lit.length ? `<p class="muted">Nothing matches anywhere in the building.</p>` : ""}`;
+    }
+
+    function renderRest() {
+      document.getElementById("rails").innerHTML = `
+        <div class="rail"><span class="rail-label">Type</span><div class="chips">${railChips("types", "type")}</div></div>
+        <div class="rail"><span class="rail-label">Finish</span><div class="chips">${railChips("finishes", "finish")}</div></div>`;
+      document.getElementById("active").innerHTML = [
+        ...f.locs.map((v) => `<button type="button" class="chip" data-rm="locs" data-v="${esc(v)}">${esc((Core.loc(v) || {}).name || "?")} ×</button>`),
+        ...f.spots.map((v) => { const [l, s] = v.split("|"); return `<button type="button" class="chip" data-rm="spots" data-v="${esc(v)}">${esc(Core.placeName(l, s))} ×</button>`; }),
+        f.barrel ? `<button type="button" class="chip" data-rm="barrel">Barrel ${esc(f.barrel)} ×</button>` : "",
+      ].join("");
+      document.getElementById("map").innerHTML = mapHtml();
+      const S = Core.state();
+      const res = Core.filterBottles(f);
+      const units = res.reduce((n, r) => n + r.total, 0);
+      const any = Core.filterActive(f);
+      document.getElementById("resLine").innerHTML = `<span><b>${plural(res.length, "bottle")}</b>, ${units} on hand</span>${any ? `<button type="button" class="link" data-clear-all>Clear all</button>` : ""}`;
+      const box = document.getElementById("results");
+      if (!S.bottles.length) box.innerHTML = `<div class="empty">No bottles yet.<br><button type="button" class="btn primary" data-first>Add your first bottle</button></div>`;
+      else if (!res.length) box.innerHTML = `<div class="empty">Nothing matches. Try fewer filters, or scan the barcode.</div>`;
+      else box.innerHTML = res.map((r) => UI.bottleCard(r)).join("");
+      header("Bottles", { sum: true });
+    }
+    function draw() { document.getElementById("banner").innerHTML = UI.backupBannerHtml(); renderRest(); }
+    unmount = Core.on(draw);
+    draw();
+  }
+
+  /* Spot sheet: what's on one shelf (or a whole room when spotId is null) */
+  function openSpot(locId, spotId) {
+    const filtered = Core.filterActive(f);
+    let onlyMatches = filtered;
+    const sh = UI.sheet({ title: spotId === null ? (Core.loc(locId) || {}).name : Core.placeName(locId, spotId) });
+    function render() {
+      const l = Core.loc(locId); if (!l) { sh.close(); return; }
+      const allRows = Core.rowsAt(locId, spotId === null ? undefined : spotId);
+      const allowed = onlyMatches ? new Set(Core.filterBottles(f).map((r) => r.b.id)) : null;
+      const rows = allRows.filter((r) => !allowed || allowed.has(r.bottleId))
+        .sort((a, b) => Core.bottle(a.bottleId).name.localeCompare(Core.bottle(b.bottleId).name) || Core.finishText(Core.bottle(a.bottleId)).localeCompare(Core.finishText(Core.bottle(b.bottleId))));
+      const n = rows.reduce((m, r) => m + r.count, 0), nAll = allRows.reduce((m, r) => m + r.count, 0);
+      sh.body.innerHTML = `<div class="spot-tools"><span>${onlyMatches ? `${n} matching of ${nAll} here` : `${nAll} bottles here`}</span>
+          ${filtered ? `<button type="button" class="link" data-toggle>${onlyMatches ? "Show everything here" : "Show only matches"}</button>` : ""}</div>
+        ${rows.length ? `<ul class="srows">${rows.map((r) => { const b = Core.bottle(r.bottleId); return `<li class="srow" role="button" tabindex="0" data-open="${b.id}">
+          <div><div class="nm">${esc(b.name)}</div><div class="sub">${esc([b.type, Core.finishText(b), b.barrel ? "Barrel " + b.barrel : "", spotId === null && r.spotId ? Core.spot(locId, r.spotId).name : ""].filter(Boolean).join(", "))}</div></div><span class="ct">${r.count}</span></li>`; }).join("")}</ul>`
+          : `<p class="muted">${onlyMatches ? "Nothing here matches." : "Empty."}</p>`}
+        <div class="actions"><button type="button" class="btn" data-count>Count ${spotId === null ? "this location" : "this spot"}</button><button type="button" class="btn primary" data-add>${ICON.plus} Add here</button></div>`;
+    }
+    sh.body.addEventListener("click", (e) => {
+      if (e.target.closest("[data-toggle]")) { onlyMatches = !onlyMatches; return render(); }
+      if (e.target.closest("[data-count]")) { sh.close(); return UI.openCountCheck({ locId, spotId, start: true }); }
+      if (e.target.closest("[data-add]")) return UI.openBottleForm({ place: { locId, spotId: spotId || "" } });
+    });
+    const off = Core.on(render); sh.onClose(off);
+    render();
+  }
+
+  /* ================= Count ================= */
+  function mountCount(host) {
+    header("Count check");
+    const draw = () => {
+      const S = Core.state();
+      host.innerHTML = `<p class="page-sub">Pick a location or one spot. Confirm each bottle the app expects there, then fix anything that's off.</p>
+        ${S.locations.map((l) => `<div class="count-loc">
+          <div class="count-loc-h"><b>${esc(l.name)}</b><button type="button" class="btn small" data-cl="${l.id}">Count all ${Core.totalAt(l.id)}</button></div>
+          ${l.spots.length ? `<div class="chips">${l.spots.map((s) => `<button type="button" class="chip" data-cl="${l.id}" data-cs="${s.id}">${esc(s.name)} <small>${Core.totalAt(l.id, s.id)}</small></button>`).join("")}</div>` : `<p class="muted" style="margin:8px 0 0;font-size:14px">No spots yet.</p>`}
+        </div>`).join("")}`;
+    };
+    host.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-cl]"); if (!b) return;
+      UI.openCountCheck({ locId: b.dataset.cl, spotId: b.dataset.cs === undefined ? null : b.dataset.cs, start: true });
+    });
+    unmount = Core.on(draw);
+    draw();
+  }
+
+  /* ================= Settings ================= */
+  const SET_TITLES = { menu: "Settings", places: "Locations and spots", types: "Whiskey types", finishes: "Finishes", excel: "Excel" };
+  function mountSettings(host) {
+    header(SET_TITLES[setPage], { back: setPage !== "menu" });
+    ({ menu: settingsMenu, places: placesPage, types: (h) => listPage(h, "types"), finishes: (h) => listPage(h, "finishes"), excel: excelPage })[setPage](host);
+  }
+  function openSet(page) { setPage = page; go("settings"); }
+
+  function settingsMenu(host) {
+    const draw = () => {
+      const S = Core.state();
+      const spots = S.locations.reduce((n, l) => n + l.spots.length, 0);
+      const bs = Core.backupStatus();
+      const row = (page, title, sub, cls = "") => `<li><button type="button" class="menu-row ${cls}" data-page="${page}"><span class="mt"><b>${title}</b>${sub ? `<span>${sub}</span>` : ""}</span>${CHEV}</button></li>`;
+      host.innerHTML = `${UI.backupBannerHtml()}
+        <ul class="menu">
+          ${row("places", "Locations and spots", `${plural(S.locations.length, "location")}, ${plural(spots, "spot")}`)}
+          ${row("types", "Whiskey types", plural(S.types.length, "type"))}
+          ${row("finishes", "Finishes", plural(S.finishes.length, "finish", "finishes"))}
+        </ul>
+        <ul class="menu">
+          ${row("excel", "Excel import and export", bs.never ? "Never exported" : `Last export ${bs.days === 0 ? "today" : plural(bs.days, "day") + " ago"}`)}
+        </ul>
+        <ul class="menu">
+          ${S.demo ? `<li><button type="button" class="menu-row" data-act="sample"><span class="mt"><b>Clear sample bottles</b><span>Keeps your locations, removes the made-up bottles and spots</span></span></button></li>` : ""}
+          <li><button type="button" class="menu-row danger" data-act="erase"><span class="mt"><b>Erase everything</b><span>Every bottle, location, spot and history entry</span></span></button></li>
+        </ul>
+        <p class="menu-note">Your inventory is saved only on this phone. Export to Excel regularly as a backup.</p>`;
+    };
+    host.addEventListener("click", (e) => {
+      const p = e.target.closest("[data-page]"); if (p) return openSet(p.dataset.page);
+      const a = e.target.closest("[data-act]"); if (!a) return;
+      if (a.dataset.act === "sample") UI.confirmSheet({ title: "Clear sample bottles?", text: "All sample bottles, spots and counts will be removed. Your location names stay.", ok: "Clear them", danger: true, onOk: () => { Core.clearSample(); UI.toast("Sample bottles cleared"); } });
+      if (a.dataset.act === "erase") UI.confirmSheet({ title: "Erase everything?", text: "This removes every bottle, count, location, spot and history entry on this phone. It can't be undone.", ok: "Erase everything", danger: true, onOk: () => { Core.eraseAll(); UI.toast("Everything erased"); } });
+    });
+    unmount = Core.on(draw);
+    draw();
+  }
+
+  function placesPage(host) {
+    let editing = null; // "loc:<id>" | "spot:<locId>:<spotId>"
+    const draw = () => {
+      const S = Core.state();
+      host.innerHTML = `<p class="page-sub">Changes show up on the map right away. Removing a spot keeps its bottles in the same location, under "No spot".</p>
+        ${S.locations.map((l, li) => `<section class="place-card">
+          <div class="pc-h">
+            ${editing === "loc:" + l.id
+              ? `<form class="inline-edit" data-form="ren-loc" data-loc="${l.id}"><input value="${esc(l.name)}" aria-label="Location name" /><button class="btn small primary">Save</button></form>`
+              : `<span class="nm">${esc(l.name)}</span><span class="ct">${Core.totalAt(l.id)} bottles</span>
+                 <span class="ord"><button type="button" class="icon-btn" data-a="loc-up" data-loc="${l.id}" aria-label="Move ${esc(l.name)} up" ${li === 0 ? "disabled" : ""}>↑</button><button type="button" class="icon-btn" data-a="loc-down" data-loc="${l.id}" aria-label="Move ${esc(l.name)} down" ${li === S.locations.length - 1 ? "disabled" : ""}>↓</button></span>`}
+          </div>
+          <ul class="pc-spots">${l.spots.map((s, si) => `<li class="pc-spot">
+            ${editing === `spot:${l.id}:${s.id}`
+              ? `<form class="inline-edit" data-form="ren-spot" data-loc="${l.id}" data-spot="${s.id}"><input value="${esc(s.name)}" aria-label="Spot name" /><button class="btn small primary">Save</button></form>`
+              : `<span class="nm">${esc(s.name)} <span class="ct">${Core.totalAt(l.id, s.id)}</span></span>
+                 <span class="ord">
+                   <button type="button" class="icon-btn" data-a="ren-spot" data-loc="${l.id}" data-spot="${s.id}" aria-label="Rename ${esc(s.name)}">${PENCIL}</button>
+                   <button type="button" class="icon-btn" data-a="spot-up" data-loc="${l.id}" data-spot="${s.id}" aria-label="Move ${esc(s.name)} up" ${si === 0 ? "disabled" : ""}>↑</button>
+                   <button type="button" class="icon-btn" data-a="spot-down" data-loc="${l.id}" data-spot="${s.id}" aria-label="Move ${esc(s.name)} down" ${si === l.spots.length - 1 ? "disabled" : ""}>↓</button>
+                   <button type="button" class="icon-btn rm" data-a="rm-spot" data-loc="${l.id}" data-spot="${s.id}" aria-label="Remove ${esc(s.name)}">×</button></span>`}
+          </li>`).join("")}</ul>
+          <form class="add-line" data-form="add-spot" data-loc="${l.id}"><input placeholder="New spot in ${esc(l.name)}, e.g. Cabinet 3" aria-label="New spot in ${esc(l.name)}" /><button class="btn small">Add spot</button></form>
+          <div class="pc-foot"><button type="button" class="link" data-a="ren-loc" data-loc="${l.id}">Rename ${esc(l.name)}</button><button type="button" class="link danger" data-a="rm-loc" data-loc="${l.id}">Remove location</button></div>
+        </section>`).join("")}
+        <section class="add-place"><h3>Add a location</h3><p class="muted" style="margin:0 0 8px;font-size:14px">For a new storage area in the building.</p>
+          <form class="add-line" data-form="add-loc"><input placeholder="e.g. Back storage" aria-label="New location name" /><button class="btn small primary">Add location</button></form></section>`;
+      const inp = host.querySelector(".inline-edit input"); if (inp) { inp.focus(); inp.select(); }
+    };
+    host.addEventListener("click", (e) => {
+      const t = e.target.closest("[data-a]"); if (!t) return;
+      const a = t.dataset.a, lid = t.dataset.loc, sid = t.dataset.spot;
+      if (a === "loc-up" || a === "loc-down") Core.moveLocation(lid, a === "loc-up" ? -1 : 1);
+      if (a === "spot-up" || a === "spot-down") Core.moveSpot(lid, sid, a === "spot-up" ? -1 : 1);
+      if (a === "ren-loc") { editing = "loc:" + lid; draw(); }
+      if (a === "ren-spot") { editing = `spot:${lid}:${sid}`; draw(); }
+      if (a === "rm-spot") {
+        const n = Core.totalAt(lid, sid);
+        const doIt = () => { Core.removeSpot(lid, sid); UI.toast("Spot removed", { undo: true }); };
+        if (n) UI.confirmSheet({ title: "Remove this spot?", text: `${Core.placeName(lid, sid)} has ${plural(n, "bottle")}. They'll stay in ${Core.loc(lid).name} under "No spot".`, ok: "Remove spot", danger: true, onOk: doIt });
+        else doIt();
+      }
+      if (a === "rm-loc") {
+        const l = Core.loc(lid);
+        if (Core.totalAt(lid) > 0) return UI.toast(`Move the ${Core.totalAt(lid)} bottles out of ${l.name} first`);
+        UI.confirmSheet({ title: `Remove ${l.name}?`, text: `${l.name} and its ${plural(l.spots.length, "spot")} will be removed.`, ok: "Remove location", danger: true, onOk: () => { Core.removeLocation(lid); UI.toast("Location removed", { undo: true }); } });
+      }
+    });
+    host.addEventListener("submit", (e) => {
+      const fm = e.target.closest("[data-form]"); if (!fm) return; e.preventDefault();
+      const v = fm.querySelector("input").value.trim(); const k = fm.dataset.form;
+      if (k === "ren-loc") { editing = null; if (v) Core.renameLocation(fm.dataset.loc, v); draw(); return; }
+      if (k === "ren-spot") { editing = null; if (v) Core.renameSpot(fm.dataset.loc, fm.dataset.spot, v); draw(); return; }
+      if (!v) return;
+      let r;
+      if (k === "add-spot") r = Core.addSpot(fm.dataset.loc, v);
+      if (k === "add-loc") r = Core.addLocation(v);
+      if (r === "exists") UI.toast("That name is already used there");
+      else UI.toast(k === "add-loc" ? `Added ${v}` : `Added ${v} to ${Core.loc(fm.dataset.loc).name}`, { undo: true });
+    });
+    unmount = Core.on(draw);
+    draw();
+  }
+
+  function listPage(host, key) {
+    const noun = key === "types" ? "type" : "finish";
+    let q = "";
+    host.innerHTML = `<p class="page-sub">These are the choices offered when you add or edit a bottle. Removing one here doesn't change any bottles.</p>
+      <form class="add-line" data-form="add"><input placeholder="Add a ${noun}" aria-label="Add a ${noun}" /><button class="btn small primary">Add</button></form>
+      <div class="search-box" style="margin-top:12px"><input type="search" placeholder="Find a ${noun}" aria-label="Find a ${noun}" /></div>
+      <div id="listBody"></div>`;
+    const body = host.querySelector("#listBody");
+    const draw = () => {
+      const S = Core.state(); const use = Core.usage(noun);
+      const n = Core.norm(q);
+      const vals = [...S[key]].sort((a, b) => a.localeCompare(b)).filter((v) => !n || Core.norm(v).includes(n));
+      body.innerHTML = `<p class="muted" style="font-size:13.5px;margin:0">${vals.length} of ${S[key].length}</p>
+        <ul class="list-rows">${vals.slice(0, 400).map((v) => { const c = Math.floor(use.get(v) || 0); return `<li class="list-row"><span class="nm">${esc(v)}</span><span class="ct">${c ? plural(c, "bottle") : ""}</span><button type="button" data-rm="${esc(v)}" aria-label="Remove ${esc(v)}">×</button></li>`; }).join("")}</ul>`;
+    };
+    host.querySelector('input[type="search"]').addEventListener("input", (e) => { q = e.target.value; draw(); });
+    host.addEventListener("click", (e) => { const r = e.target.closest("[data-rm]"); if (r) { Core.removeListItem(key, r.dataset.rm); UI.toast(`Removed ${r.dataset.rm}`, { undo: true }); } });
+    host.addEventListener("submit", (e) => {
+      e.preventDefault(); const inp = e.target.querySelector("input"); const v = inp.value.trim(); if (!v) return;
+      if (Core.addListItem(key, v) === "exists") UI.toast("That's already on the list"); else { inp.value = ""; UI.toast(`Added ${v}`, { undo: true }); }
+    });
+    unmount = Core.on(draw);
+    draw();
+  }
+
+  function excelPage(host) {
+    const draw = () => {
+      const bs = Core.backupStatus();
+      host.innerHTML = `${UI.backupBannerHtml()}
+        <section class="set-section"><h3>Export</h3><p>${bs.never ? "Never exported." : `Last export ${bs.days === 0 ? "today" : plural(bs.days, "day") + " ago"}.`} Saves every bottle with its location, spot and count as an Excel file.</p>
+          <button type="button" class="btn primary wide" data-x="export">Export to Excel</button></section>
+        <section class="set-section"><h3>Import and merge</h3><p>Counts in the sheet are added to matching bottles: same name, type, finish, finish time and barrel, in the same spot. 2 on hand + 4 in the sheet = 6. New locations and spots in the sheet are created for you. You'll see a short preview before anything changes.</p>
+          <button type="button" class="btn wide" data-x="import">Import an Excel sheet</button>
+          <p style="margin:12px 0 0;font-size:13.5px">Don't re-import a file you exported from this app. Its counts would be added again.</p></section>`;
+    };
+    host.addEventListener("click", (e) => { const x = e.target.closest("[data-x]"); if (!x) return; if (x.dataset.x === "export") UI.doExport(); else UI.startImport(); });
+    unmount = Core.on(draw);
+    draw();
+  }
+
+  go("find");
+  UI.registerSW();
+})();
+</script>
+</body>
+</html>
